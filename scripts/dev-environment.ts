@@ -1,87 +1,92 @@
-export const DEFAULT_WORKER_PORT = 8787
-export const DEFAULT_VITE_PORT = 5173
+/** Portless route for the Worker; linked git worktrees get a branch prefix. */
+export const WORKER_ROUTE_NAME = 'popcomputer-web-demo'
+
+/** Portless route for the Vite asset and HMR server. */
+export const VITE_ROUTE_NAME = `vite.${WORKER_ROUTE_NAME}`
+
+/** Fixed loopback pair used only when portless is bypassed with `PORTLESS=0`. */
+export const DIRECT_WORKER_PORT = 8787
+export const DIRECT_VITE_PORT = 5173
 
 /** Environment shared by the paired Worker and Vite development processes. */
 export interface DevServerEnvironment {
-  readonly DEV_VITE_PORT: string
+  readonly DEV_VITE_ORIGIN: string
   readonly DEV_WORKER_ORIGIN: string
 }
 
 /** Validated Vite settings derived from the paired development environment. */
 export interface ViteDevServerConfiguration {
-  readonly port: number
   readonly viteOrigin: string
   readonly workerOrigin: string
 }
 
-function readPort(value: string | undefined): number {
-  if (value === undefined) return DEFAULT_VITE_PORT
+/** A development origin was not an exact local HTTP(S) origin. */
+export class InvalidDevOrigin extends Error {
+  readonly _tag = 'InvalidDevOrigin' as const
 
-  const port = Number(value)
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error('DEV_VITE_PORT must be an integer between 1 and 65535.')
+  constructor(readonly variable: string) {
+    super(`${variable} must be an exact local HTTP(S) origin.`)
   }
-
-  return port
 }
 
-function readWorkerOrigin(value: string | undefined): string {
-  const raw = value ?? `http://localhost:${DEFAULT_WORKER_PORT}`
-  let origin: URL
+function isLocalHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname.endsWith('.localhost')
+  )
+}
 
+/**
+ * Parses one exact origin for a local development server. Portless publishes
+ * `*.localhost` names; the direct fallback uses plain loopback hosts.
+ */
+export function readDevOrigin(variable: string, value: string | undefined): URL {
+  if (value === undefined) throw new InvalidDevOrigin(variable)
+
+  let origin: URL
   try {
-    origin = new URL(raw)
+    origin = new URL(value)
   } catch {
-    throw new Error('DEV_WORKER_ORIGIN must be an exact loopback HTTP origin.')
+    throw new InvalidDevOrigin(variable)
   }
 
-  const loopback =
-    origin.hostname === 'localhost' ||
-    origin.hostname === '127.0.0.1' ||
-    origin.hostname === '[::1]'
   if (
-    origin.protocol !== 'http:' ||
-    !loopback ||
-    origin.port === '' ||
+    (origin.protocol !== 'http:' && origin.protocol !== 'https:') ||
+    !isLocalHostname(origin.hostname) ||
     origin.username !== '' ||
     origin.password !== '' ||
     origin.pathname !== '/' ||
     origin.search !== '' ||
     origin.hash !== '' ||
-    origin.origin !== raw
+    origin.origin !== value
   ) {
-    throw new Error('DEV_WORKER_ORIGIN must be an exact loopback HTTP origin.')
+    throw new InvalidDevOrigin(variable)
   }
 
-  return origin.origin
+  return origin
 }
 
-/** Builds the inherited environment for one selected local port pair. */
-export function createDevServerEnvironment(ports: {
-  readonly worker: number
-  readonly vite: number
-}): DevServerEnvironment {
-  return {
-    DEV_VITE_PORT: String(ports.vite),
-    DEV_WORKER_ORIGIN: `http://localhost:${ports.worker}`,
-  }
-}
-
-/** Parses the only two environment values consumed by Vite configuration. */
-export function readViteDevServerConfiguration(
-  environment?: {
-    readonly DEV_VITE_PORT?: string
-    readonly DEV_WORKER_ORIGIN?: string
-  }
-): ViteDevServerConfiguration {
+/**
+ * Parses the two values Vite consumes from `bun run dev`. Standalone Vite
+ * commands such as `vite build` receive neither and need no dev-server policy.
+ */
+export function readViteDevServerConfiguration(environment?: {
+  readonly DEV_VITE_ORIGIN?: string
+  readonly DEV_WORKER_ORIGIN?: string
+}): ViteDevServerConfiguration | undefined {
   const values = environment ?? {
-    DEV_VITE_PORT: process.env.DEV_VITE_PORT,
+    DEV_VITE_ORIGIN: process.env.DEV_VITE_ORIGIN,
     DEV_WORKER_ORIGIN: process.env.DEV_WORKER_ORIGIN,
   }
-  const port = readPort(values.DEV_VITE_PORT)
+  if (values.DEV_VITE_ORIGIN === undefined && values.DEV_WORKER_ORIGIN === undefined) {
+    return undefined
+  }
+
   return {
-    port,
-    viteOrigin: `http://localhost:${port}`,
-    workerOrigin: readWorkerOrigin(values.DEV_WORKER_ORIGIN),
+    viteOrigin: readDevOrigin('DEV_VITE_ORIGIN', values.DEV_VITE_ORIGIN).origin,
+    workerOrigin: readDevOrigin('DEV_WORKER_ORIGIN', values.DEV_WORKER_ORIGIN)
+      .origin,
   }
 }

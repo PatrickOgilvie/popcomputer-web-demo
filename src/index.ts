@@ -1,4 +1,4 @@
-import { createTemplate, createVersion, setupWeb, vite } from '@popcomputer/web'
+import { createTemplate, createVersion, setupWeb } from '@popcomputer/web'
 import {
   EffectErrorObserverService,
   type EffectErrorEvent,
@@ -15,6 +15,7 @@ import { runtimeConfigMiddleware } from '~/runtime/runtime-config'
 import { makeRequestCancellationLayer } from '~/runtime/request-cancellation'
 import { makeRawRequestLayer } from '~/http/bounded-request-body'
 import { noStoreResponse } from '~/http/no-store-response'
+import { viteDevAssets } from '~/runtime/vite-dev-assets'
 
 const app = new Hono<AppEnv>()
 
@@ -28,6 +29,14 @@ import manifest from '../dist/manifest.json'
 
 const assetVersion = createVersion(manifest)
 const entry = manifest['src/main.tsx']
+
+// Browser chrome follows the page canvas in both color schemes.
+const documentHead = [
+  '<meta name="color-scheme" content="light dark">',
+  '<link rel="icon" href="/favicon.svg" type="image/svg+xml">',
+  '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">',
+  '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b">',
+].join('\n    ')
 
 const observeEffectError = Effect.fn('PopcomputerWebDemo.observeEffectError')(
   function* (event: EffectErrorEvent) {
@@ -69,20 +78,20 @@ setupWeb(app, {
     const config = ctx.var.runtimeConfig
     const isDev = config.mode === 'development'
     if (isDev) {
-      const vitePort = config.vitePort
+      const assets = viteDevAssets(config.viteOrigin)
       return {
-        title: '@popcomputer/web Demo',
-        scripts: [vite.script('/src/main.tsx', vitePort)],
+        title: 'popcomputer/web demo',
+        scripts: [...assets.scripts],
         styles: [],
-        head: vite.hmrHead(vitePort),
+        head: `${documentHead}${assets.head}`,
       }
     }
 
     return {
-      title: '@popcomputer/web Demo',
+      title: 'popcomputer/web demo',
       scripts: [`/${entry.file}`],
       styles: (entry.css ?? []).map((asset: string) => `/${asset}`),
-      head: '',
+      head: documentHead,
     }
   }),
   effect: {

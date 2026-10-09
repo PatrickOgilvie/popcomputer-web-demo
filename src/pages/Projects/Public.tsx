@@ -1,100 +1,81 @@
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link, usePage } from '@inertiajs/react'
 
+import { buttonClassName } from '~/components/button'
+import { formatDate } from '~/components/format'
 import Layout from '~/components/Layout'
-import type {
-  PublicProject as PublicProjectResource,
-} from '~/presentation/project'
+import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
+import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
+import type { PublicProject as PublicProjectResource } from '~/presentation/project'
+import type { PageProps } from '~/types'
 
 interface PublicProjectProps {
   readonly project: PublicProjectResource
 }
 
-const updatedAtFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'long',
-  timeStyle: 'short',
-})
-
-function formatUpdatedAt(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : updatedAtFormatter.format(date)
-}
-
-/** Presents the current public projection of a project. */
+/** Presents the current public projection of a project to anyone. */
 export default function PublicProject({ project }: PublicProjectProps) {
+  const { auth } = usePage<PageProps>().props
+  const isSignedIn = Boolean(auth?.user)
+
   return (
     <>
-      <Head title={`${project.name} — Public showcase`}>
-        <meta name="theme-color" content="#f5f3ee" />
+      <Head title={project.name}>
         <meta
           name="description"
           content={project.description.trim() || `Public project: ${project.name}`}
         />
       </Head>
-      <Layout breadcrumbs={[{ label: 'Public showcase' }]}>
-        <article className="public-project">
-          <header className="public-project-hero">
-            <div className="public-badges">
-              <span className="visibility-badge visibility-badge--public">
-                <span className="visibility-dot" aria-hidden="true" />
-                Public
-              </span>
-              <span className="privacy-badge">
-                <span aria-hidden="true" />
-                Live visibility
+      <Layout>
+        <article className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-4 sm:py-8">
+          <header className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+              <ProjectVisibilityBadge visibility="public" />
+              <span>
+                Updated{' '}
+                <time dateTime={project.updatedAt}>{formatDate(project.updatedAt)}</time>
               </span>
             </div>
-            <h1>{project.name}</h1>
-            <p>{project.description.trim() || 'No description has been added.'}</p>
+            <h1 className="text-3xl font-semibold text-balance break-words sm:text-4xl">
+              {project.name}
+            </h1>
           </header>
 
-          <div className="public-project-body">
-            <section className="public-story" aria-labelledby="privacy-story-title">
-              <p className="eyebrow">@popcomputer/web at work</p>
-              <h2 id="privacy-story-title">Public when you say so</h2>
-              <p>
-                Each visit reads the current project visibility. This page is not
-                stored at the edge, so making the project private or deleting it
-                takes effect immediately.
-              </p>
+          {project.description.trim() ? (
+            <p className="text-base whitespace-pre-line text-pretty text-zinc-700 sm:text-lg dark:text-zinc-300">
+              {project.description}
+            </p>
+          ) : (
+            <p className="text-base text-zinc-500 dark:text-zinc-400">
+              The owner hasn’t added a description.
+            </p>
+          )}
 
-              <dl className="public-stack-grid">
-                <div>
-                  <dt>Read model</dt>
-                  <dd>Effect Schema</dd>
-                </div>
-                <div>
-                  <dt>Persistence</dt>
-                  <dd>Cloudflare D1</dd>
-                </div>
-                <div>
-                  <dt>Delivery</dt>
-                  <dd>Always current</dd>
-                </div>
-              </dl>
-            </section>
-
-            <aside className="public-response-card">
-              <p className="card-label card-label--inverse">Public response</p>
-              <dl>
-                <div>
-                  <dt>Visibility</dt>
-                  <dd>Public projection</dd>
-                </div>
-                <div>
-                  <dt>Updated</dt>
-                  <dd>
-                    <time dateTime={project.updatedAt}>
-                      {formatUpdatedAt(project.updatedAt)}
-                    </time>
-                  </dd>
-                </div>
-              </dl>
-              <Link href="/projects" className="light-button">
-                Open project dashboard
-              </Link>
-            </aside>
-          </div>
+          <footer className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-sm text-pretty text-zinc-600 dark:text-zinc-400">
+              {isSignedIn
+                ? 'Shared from the popcomputer/web demo.'
+                : 'Shared from the popcomputer/web demo. Create an account to publish your own.'}
+            </p>
+            <Link
+              href={isSignedIn ? '/projects' : '/register'}
+              className={buttonClassName({ variant: isSignedIn ? 'secondary' : 'primary' })}
+            >
+              {isSignedIn ? 'Your projects' : 'Create an account'}
+            </Link>
+          </footer>
         </article>
+
+        <UnderTheHood route="GET /showcase/projects/{project}" name="projects.public">
+          <Guarantee>
+            The project is loaded by declarative route model binding and its row is
+            schema-checked.
+          </Guarantee>
+          <Guarantee>
+            Never cached at the edge: a project made private or deleted disappears on
+            the next request.
+          </Guarantee>
+          <Guarantee>Only the name, description, and update time reach the browser.</Guarantee>
+        </UnderTheHood>
       </Layout>
     </>
   )

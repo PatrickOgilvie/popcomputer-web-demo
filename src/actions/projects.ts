@@ -2,11 +2,11 @@ import { Effect, Option, Schema as S } from 'effect'
 
 import {
   action,
-  authorize,
   bound,
   HttpError,
   json,
   NotFoundError,
+  notFound,
   prefersJson,
   redirect,
   render,
@@ -15,15 +15,8 @@ import {
 } from '@popcomputer/web/effect'
 import {
   DeleteProjectOutcome,
-  type ProjectActor,
   ProjectDeleteConflict,
-  ProjectIdConflict,
-  ProjectLifetimeLimitReached,
-  type ProjectMutationCancelled,
-  ProjectNotFound,
   ProjectUpdateConflict,
-  type ProjectReadCancelled,
-  type ProjectReadFailure,
   Projects,
 } from '~/application/projects'
 import {
@@ -32,6 +25,10 @@ import {
   ProjectParams,
   UpdateProjectInput,
 } from '~/domain/project'
+import {
+  currentProjectActor,
+  toProjectHttpFailure,
+} from '~/http/project-http'
 import {
   defineStrictForm,
   respondWithStrictFormErrors,
@@ -42,85 +39,6 @@ import {
   toProjectSummary,
   toPublicProject,
 } from '~/presentation/project'
-
-type ProjectActionFailure =
-  | ProjectIdConflict
-  | ProjectLifetimeLimitReached
-  | ProjectDeleteConflict
-  | ProjectMutationCancelled
-  | ProjectNotFound
-  | ProjectUpdateConflict
-  | ProjectReadCancelled
-  | ProjectReadFailure
-
-function toProjectActionFailure(
-  failure: ProjectActionFailure
-): HttpError | NotFoundError {
-  switch (failure._tag) {
-    case 'ProjectNotFound':
-      return NotFoundError.forResource('Project', failure.projectId)
-    case 'ProjectIdConflict':
-      return new HttpError({
-        status: 409,
-        message:
-          'That project identifier is already in use. Reload the form and try again.',
-      })
-    case 'ProjectLifetimeLimitReached':
-      return new HttpError({
-        status: 409,
-        message: `This account has reached its lifetime limit of ${failure.limit} project identifiers.`,
-      })
-    case 'ProjectUpdateConflict':
-      return new HttpError({
-        status: 409,
-        message:
-          'This project changed after the edit form was opened. Reload it before saving again.',
-      })
-    case 'ProjectDeleteConflict':
-      return new HttpError({
-        status: 409,
-        message:
-          'This project changed after the page was opened. Reload it before deleting.',
-      })
-    case 'ProjectStoreUnavailable':
-      return new HttpError({
-        status: 503,
-        message: 'Project data is temporarily unavailable.',
-        body: { operation: failure.operation },
-      })
-    case 'InvalidStoredProject':
-    case 'UnexpectedProjectStoreResult':
-      return new HttpError({
-        status: 500,
-        message: 'Stored project data is invalid.',
-      })
-    case 'ProjectReadCancelled':
-      return new HttpError({
-        status: 408,
-        message: 'The project request was cancelled before it completed.',
-        body: { operation: failure.operation },
-      })
-    case 'ProjectMutationCancelled':
-      return new HttpError({
-        status: 408,
-        message: failure.mutationCommitted
-          ? 'The project change was saved before the request was cancelled. Reload before making another change.'
-          : 'The project request was cancelled before a change was saved.',
-        body: {
-          operation: failure.operation,
-          mutationCommitted: failure.mutationCommitted,
-        },
-      })
-  }
-}
-
-const currentProjectActor = authorize().pipe(
-  Effect.map(
-    (auth): ProjectActor => ({
-      userId: auth.user.id,
-    })
-  )
-)
 
 const projectIdFromRequest = Effect.gen(function* () {
   const request = yield* RequestService
@@ -142,7 +60,7 @@ const getOwnedProject = Effect.fn('Projects.httpGetOwned')(function* () {
   const projects = yield* Projects
   const owned = yield* projects
     .getOwned(actor, projectId)
-    .pipe(Effect.mapError(toProjectActionFailure))
+    .pipe(Effect.mapError(toProjectHttpFailure))
 
   return { actor, project: owned.project }
 })()
@@ -154,7 +72,7 @@ export const showProjects = action(
     const projects = yield* Projects
     const owned = yield* projects
       .listOwned(actor)
-      .pipe(Effect.mapError(toProjectActionFailure))
+      .pipe(Effect.mapError(toProjectHttpFailure))
 
     return yield* render('Projects/Index', {
       projects: owned.map(({ project }) => toProjectSummary(project)),
@@ -169,7 +87,7 @@ export const listProjectsApi = action(
     const projects = yield* Projects
     const owned = yield* projects
       .listOwned(actor)
-      .pipe(Effect.mapError(toProjectActionFailure))
+      .pipe(Effect.mapError(toProjectHttpFailure))
     const payload = yield* S.decodeUnknownEffect(ProjectApiIndexResponse, {
       onExcessProperty: 'error',
     })({
@@ -208,7 +126,7 @@ export const storeProject = defineStrictForm({
       const projects = yield* Projects
       const outcome = yield* projects
         .create(actor, input)
-        .pipe(Effect.mapError(toProjectActionFailure))
+        .pipe(Effect.mapError(toProjectHttpFailure))
 
       return yield* redirect(`/projects/${outcome.project.project.id}`)
     }),
@@ -255,12 +173,12 @@ export const updateProject = defineStrictForm({
           Effect.catchTag('ProjectUpdateConflict', () =>
             Effect.succeed(Option.none())
           ),
-          Effect.mapError(toProjectActionFailure)
+          Effect.mapError(toProjectHttpFailure)
         )
 
       if (Option.isNone(updated)) {
         if (yield* prefersJson) {
-          return yield* toProjectActionFailure(
+          return yield* toProjectHttpFailure(
             new ProjectUpdateConflict({
               projectId: prepared.project.id,
             })
@@ -269,7 +187,7 @@ export const updateProject = defineStrictForm({
 
         const current = yield* projects
           .getOwned(prepared.actor, prepared.project.id)
-          .pipe(Effect.mapError(toProjectActionFailure))
+          .pipe(Effect.mapError(toProjectHttpFailure))
 
         return yield* renderWithErrors(
           'Projects/Edit',
@@ -308,12 +226,12 @@ export const destroyProject = defineStrictForm({
           Effect.catchTag('ProjectDeleteConflict', () =>
             Effect.succeed(Option.none())
           ),
-          Effect.mapError(toProjectActionFailure)
+          Effect.mapError(toProjectHttpFailure)
         )
 
       if (Option.isNone(outcome)) {
         if (yield* prefersJson) {
-          return yield* toProjectActionFailure(
+          return yield* toProjectHttpFailure(
             new ProjectDeleteConflict({
               projectId: prepared.project.id,
             })
@@ -322,7 +240,7 @@ export const destroyProject = defineStrictForm({
 
         const current = yield* projects
           .getOwned(prepared.actor, prepared.project.id)
-          .pipe(Effect.mapError(toProjectActionFailure))
+          .pipe(Effect.mapError(toProjectHttpFailure))
 
         return yield* renderWithErrors(
           'Projects/Show',
@@ -335,10 +253,7 @@ export const destroyProject = defineStrictForm({
       }
 
       if (DeleteProjectOutcome.$is('AlreadyAbsent')(outcome.value)) {
-        return yield* NotFoundError.forResource(
-          'Project',
-          prepared.project.id
-        )
+        return yield* notFound('Project', prepared.project.id)
       }
 
       return yield* redirect('/projects')
@@ -364,10 +279,7 @@ export const showPublicProject = action(
       storedProject.deletedAt !== null ||
       storedProject.visibility !== 'public'
     ) {
-      return yield* NotFoundError.forResource(
-        'Project',
-        storedProject.id
-      )
+      return yield* notFound('Project', storedProject.id)
     }
 
     return yield* render('Projects/Public', {

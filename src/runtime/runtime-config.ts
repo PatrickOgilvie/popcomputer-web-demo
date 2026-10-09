@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from 'hono'
 
 import { AuthSecret, type AuthSecret as AuthSecretValue } from '~/domain/auth-credentials'
 
-const DEFAULT_VITE_PORT = 5173
+const DEFAULT_VITE_ORIGIN = 'http://localhost:5173'
 
 /** Deployment modes with deliberately closed rendering and diagnostics behavior. */
 export const DeploymentMode = S.Literals(['development', 'production'])
@@ -11,7 +11,7 @@ export const DeploymentMode = S.Literals(['development', 'production'])
 /** A parsed application deployment mode. */
 export type DeploymentMode = S.Schema.Type<typeof DeploymentMode>
 
-const StrictScalarText = S.String.check(S.isPattern(/^\S+$/))
+const StrictScalarText = S.String.check(S.isPattern(/^\S+$/u))
 
 const HttpOrigin = StrictScalarText.pipe(S.decodeTo(S.URLFromString)).check(
   S.makeFilter((url) => {
@@ -30,16 +30,12 @@ const HttpOrigin = StrictScalarText.pipe(S.decodeTo(S.URLFromString)).check(
   })
 )
 
-const VitePort = S.String.check(S.isPattern(/^[1-9]\d*$/))
-  .pipe(S.decodeTo(S.NumberFromString))
-  .check(S.isInt(), S.isBetween({ minimum: 1, maximum: 65_535 }))
-
 /** Scalar Worker bindings consumed by the runtime configuration boundary. */
 export interface RuntimeConfigBindings {
   readonly APP_ORIGIN?: string
   readonly BETTER_AUTH_SECRET?: string
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string
-  readonly DEV_VITE_PORT?: string
+  readonly DEV_VITE_ORIGIN?: string
   readonly ENVIRONMENT?: string
 }
 
@@ -49,7 +45,7 @@ export interface RuntimeConfig {
   readonly appOrigin: URL
   readonly authSecret: AuthSecretValue
   readonly trustedOrigins: ReadonlyArray<URL>
-  readonly vitePort: number
+  readonly viteOrigin: URL
 }
 
 /** Runtime configuration fields safe to identify in diagnostics. */
@@ -58,7 +54,7 @@ export const RuntimeConfigField = S.Literals([
   'APP_ORIGIN',
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_TRUSTED_ORIGINS',
-  'DEV_VITE_PORT',
+  'DEV_VITE_ORIGIN',
 ])
 
 /** A safe startup diagnostic that never retains the rejected configuration value. */
@@ -145,12 +141,10 @@ export const parseRuntimeConfig = Effect.fn('RuntimeConfig.parse')(function* (
     S.Array(HttpOrigin),
     trustedOriginInputs(bindings.BETTER_AUTH_TRUSTED_ORIGINS)
   )
-  const vitePort = yield* decodeField(
-    'DEV_VITE_PORT',
-    VitePort,
-    bindings.DEV_VITE_PORT === undefined
-      ? String(DEFAULT_VITE_PORT)
-      : bindings.DEV_VITE_PORT
+  const viteOrigin = yield* decodeField(
+    'DEV_VITE_ORIGIN',
+    HttpOrigin,
+    bindings.DEV_VITE_ORIGIN ?? DEFAULT_VITE_ORIGIN
   )
 
   yield* requireSecureProductionOrigin(
@@ -173,7 +167,7 @@ export const parseRuntimeConfig = Effect.fn('RuntimeConfig.parse')(function* (
     appOrigin,
     authSecret,
     trustedOrigins,
-    vitePort,
+    viteOrigin,
   } satisfies RuntimeConfig
 })
 

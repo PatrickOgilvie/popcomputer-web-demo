@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
 import AuthShell from '~/components/AuthShell'
+import { buttonClassName } from '~/components/button'
 import TextField from '~/components/TextField'
 
 export default function Register() {
@@ -27,22 +28,22 @@ export default function Register() {
 
   return (
     <>
-      <Head title="Create account">
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
+      <Head title="Create account" />
       <AuthShell
-        title="Create your demo account"
-        description="Explore protected routes, typed server actions, and edge-ready persistence."
+        title="Create your account"
+        description="It takes a few seconds. Everything you create stays in this demo’s database."
         alternatePrompt="Already have an account?"
         alternateHref="/login"
         alternateLabel="Sign in"
+        route="POST /register"
+        routeName="registration.store"
       >
-        <form ref={formRef} className="auth-form" onSubmit={handleSubmit}>
+        <form ref={formRef} className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <TextField
             id="name"
             name="name"
             type="text"
-            label="Full name"
+            label="Name"
             autoComplete="name"
             required
             value={data.name}
@@ -56,7 +57,7 @@ export default function Register() {
             id="email"
             name="email"
             type="email"
-            label="Email address"
+            label="Email"
             autoComplete="email"
             spellCheck={false}
             required
@@ -74,6 +75,7 @@ export default function Register() {
             label="Password"
             autoComplete="new-password"
             required
+            hint="At least 8 characters."
             value={data.password}
             error={errors.password}
             onChange={(event) => {
@@ -81,23 +83,12 @@ export default function Register() {
               clearErrors('password')
             }}
           />
-
           <button
             type="submit"
             disabled={processing}
-            className="primary-button"
             aria-busy={processing}
+            className={buttonClassName({ className: 'mt-1 w-full' })}
           >
-            {processing ? (
-              <svg
-                className="button-spinner"
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <circle cx="10" cy="10" r="7" />
-              </svg>
-            ) : null}
             <span aria-live="polite">
               {processing ? 'Creating account…' : 'Create account'}
             </span>

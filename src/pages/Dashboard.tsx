@@ -1,169 +1,198 @@
 import { Head, Link, usePage } from '@inertiajs/react'
+import { ArrowRight, FolderPlus, Plus } from 'lucide-react'
+import type { ReactNode } from 'react'
 
+import { buttonClassName } from '~/components/button'
+import EmptyState from '~/components/EmptyState'
+import { formatDate, formatRelativeTime } from '~/components/format'
 import Layout from '~/components/Layout'
+import PageHeader from '~/components/PageHeader'
+import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
+import { describeSessionDevice } from '~/components/session-device'
+import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
+import type { DashboardProps } from '~/presentation/dashboard'
 import type { PageProps } from '~/types'
 
-const destinations = [
-  {
-    id: 'projects',
-    href: '/projects',
-    title: 'Projects',
-    description: 'Create, manage, and publish your D1-backed projects.',
-    detail: 'Owner-scoped records',
-  },
-  {
-    id: 'sessions',
-    href: '/sessions',
-    title: 'Sessions',
-    description: 'Review active sessions and revoke access when needed.',
-    detail: 'Better Auth security',
-  },
-] as const
+const cardClassName =
+  'rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900'
 
-const requestSteps = ['Hono', 'Better Auth', 'Effect', 'React'] as const
-
-const runtimeFacts = [
-  { label: 'Route', value: 'GET /' },
-  { label: 'Database', value: 'Cloudflare D1' },
-  { label: 'Rendering', value: 'Inertia + React' },
-] as const
-
-type DestinationId = (typeof destinations)[number]['id']
-
-function DestinationIcon({ id }: { readonly id: DestinationId }) {
-  if (id === 'projects') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M3.75 7.25h6.1l2.15 2.2h8.25v9.3H3.75z" />
-        <path d="M3.75 7.25V5.5h6.1L12 7.7" />
-      </svg>
-    )
-  }
-
+function StatCard({
+  label,
+  value,
+  children,
+  href,
+  linkLabel,
+}: {
+  readonly label: string
+  readonly value: number
+  readonly children: ReactNode
+  readonly href: string
+  readonly linkLabel: string
+}) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3.75" y="5" width="16.5" height="14" rx="3" />
-      <path d="M7.75 9.75h8.5M7.75 14h5" />
-      <circle cx="17.25" cy="15" r="2.35" />
-    </svg>
+    <section className={`${cardClassName} flex flex-col p-5`} aria-label={label}>
+      <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</h2>
+      <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+      <div className="mt-3 flex-1 text-sm text-zinc-600 dark:text-zinc-400">{children}</div>
+      <Link
+        href={href}
+        className="mt-4 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-zinc-950 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:text-white"
+      >
+        {linkLabel}
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </Link>
+    </section>
   )
 }
 
-function ArrowIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M4 10h11M11 6l4 4-4 4" />
-    </svg>
-  )
-}
-
-/** Presents the authenticated framework dashboard. */
-export default function Dashboard() {
+/** Summarizes the signed-in account: recent projects, visibility, and devices. */
+export default function Dashboard({ projects, sessions }: DashboardProps) {
   const { auth } = usePage<PageProps>().props
   const trimmedName = auth?.user?.name?.trim()
-  const displayName =
-    trimmedName && trimmedName.length > 0
-      ? trimmedName
-      : (auth?.user?.email ?? 'there')
-  const [firstName = displayName] = displayName.split(/\s+/)
-  const email = auth?.user?.email ?? ''
+  const firstName =
+    (trimmedName && trimmedName.split(/\s+/)[0]) || auth?.user?.email || 'there'
+  const hasProjects = projects.total > 0
+  const currentDevice = sessions.current
+    ? describeSessionDevice(sessions.current.userAgent)
+    : undefined
+  const otherSessions = Math.max(sessions.active - (sessions.current ? 1 : 0), 0)
+  const publicShare = hasProjects ? (projects.public / projects.total) * 100 : 0
 
   return (
     <>
-      <Head title="Dashboard">
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
+      <Head title="Dashboard" />
       <Layout>
-        <div className="dashboard">
-          <header className="dashboard-welcome">
-            <div className="dashboard-welcome-copy">
-              <p className="dashboard-overline">
-                <span aria-hidden="true" />
-                Workspace ready
-              </p>
-              <h1>Welcome back, {firstName}.</h1>
-              <p className="dashboard-intro">
-                Your projects and account activity are ready when you are.
-              </p>
-            </div>
-            <p className="dashboard-identity">
-              <span>Signed in as</span>
-              <strong>{email}</strong>
-            </p>
-          </header>
+        <PageHeader
+          title={`Good to see you, ${firstName}`}
+          description={
+            hasProjects
+              ? 'Your projects and signed-in devices at a glance.'
+              : 'Your account is ready. Start with a project — you can publish it whenever you like.'
+          }
+          actions={
+            hasProjects ? (
+              <Link href="/projects/create" className={buttonClassName()}>
+                <Plus aria-hidden="true" />
+                New project
+              </Link>
+            ) : undefined
+          }
+        />
 
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
           <section
-            className="dashboard-destinations"
-            aria-labelledby="destinations-title"
+            aria-labelledby="recent-projects-title"
+            className={`${cardClassName} lg:col-span-2`}
           >
-            <div className="dashboard-section-heading">
-              <div>
-                <p className="dashboard-label">Workspace</p>
-                <h2 id="destinations-title">Continue where you left off</h2>
-              </div>
-              <p>Choose a destination. Everything else stays out of the way.</p>
-            </div>
-
-            <div className="destination-grid">
-              {destinations.map((destination) => (
+            <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+              <h2 id="recent-projects-title" className="text-base font-semibold">
+                Recently updated
+              </h2>
+              {hasProjects ? (
                 <Link
-                  key={destination.id}
-                  href={destination.href}
-                  className={`destination-card destination-card--${destination.id}`}
+                  href="/projects"
+                  className="rounded-sm text-sm font-medium text-zinc-600 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-orange-600 dark:text-zinc-400 dark:hover:text-white"
                 >
-                  <span className="destination-icon">
-                    <DestinationIcon id={destination.id} />
-                  </span>
-                  <div className="destination-copy">
-                    <h3>{destination.title}</h3>
-                    <p>{destination.description}</p>
-                  </div>
-                  <span className="destination-footer">
-                    <span>{destination.detail}</span>
-                    <span className="destination-arrow">
-                      <ArrowIcon />
-                    </span>
-                  </span>
+                  View all
                 </Link>
-              ))}
+              ) : null}
             </div>
-          </section>
-
-          <section className="runtime-panel" aria-labelledby="runtime-title">
-            <div className="runtime-summary">
-              <div>
-                <p className="dashboard-label">Latest request</p>
-                <h2 id="runtime-title">Everything is working.</h2>
-                <p>
-                  This page crossed four typed boundaries at the edge before it
-                  reached your browser.
-                </p>
+            {hasProjects ? (
+              <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {projects.recent.map((project) => (
+                  <li key={project.id} className="relative flex items-center gap-4 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/projects/${encodeURIComponent(project.id)}`}
+                        className="block truncate text-sm font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-orange-600"
+                      >
+                        {project.name}
+                      </Link>
+                      <p className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-400">
+                        {project.description.trim() || 'No description'}
+                      </p>
+                    </div>
+                    <ProjectVisibilityBadge visibility={project.visibility} />
+                    <time
+                      dateTime={project.updatedAt}
+                      className="hidden w-28 shrink-0 text-right text-sm text-zinc-500 tabular-nums sm:block"
+                    >
+                      {formatRelativeTime(project.updatedAt)}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="p-5">
+                <EmptyState
+                  icon={FolderPlus}
+                  title="No projects yet"
+                  description="Projects are private until you publish them, and only your account can change them."
+                  action={
+                    <Link href="/projects/create" className={buttonClassName()}>
+                      Create a project
+                    </Link>
+                  }
+                />
               </div>
-              <span className="runtime-status">
-                <span aria-hidden="true" />
-                200 OK
-              </span>
-            </div>
-
-            <ol className="request-track" aria-label="Request lifecycle">
-              {requestSteps.map((step, index) => (
-                <li key={step}>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <strong>{step}</strong>
-                </li>
-              ))}
-            </ol>
-
-            <dl className="runtime-facts">
-              {runtimeFacts.map((fact) => (
-                <div key={fact.label}>
-                  <dt>{fact.label}</dt>
-                  <dd translate="no">{fact.value}</dd>
-                </div>
-              ))}
-            </dl>
+            )}
           </section>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
+            <StatCard
+              label="Projects"
+              value={projects.total}
+              href="/projects"
+              linkLabel="Open projects"
+            >
+              {hasProjects ? (
+                <>
+                  <div
+                    className="flex h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700"
+                    aria-hidden="true"
+                  >
+                    <div className="bg-emerald-500" style={{ width: `${publicShare}%` }} />
+                  </div>
+                  <p className="mt-2 tabular-nums">
+                    {projects.public} public · {projects.private} private
+                  </p>
+                </>
+              ) : (
+                <p>Nothing published yet.</p>
+              )}
+            </StatCard>
+
+            <StatCard
+              label="Signed-in devices"
+              value={sessions.active}
+              href="/sessions"
+              linkLabel="Manage devices"
+            >
+              {currentDevice && sessions.current ? (
+                <p className="text-pretty">
+                  This device: {currentDevice.label}, signed in{' '}
+                  {formatDate(sessions.current.createdAt)}.
+                  {otherSessions > 0
+                    ? ` ${otherSessions} other ${otherSessions === 1 ? 'device' : 'devices'}.`
+                    : ' No other devices.'}
+                </p>
+              ) : (
+                <p>Your current device couldn’t be identified.</p>
+              )}
+            </StatCard>
+          </div>
         </div>
+
+        <UnderTheHood route="GET /" name="dashboard.show">
+          <Guarantee>
+            One Effect loads your projects and devices concurrently through two
+            application services.
+          </Guarantee>
+          <Guarantee>Every D1 read is scoped to your account’s owner ID.</Guarantee>
+          <Guarantee>
+            The response is sent with <code className="font-mono text-xs">Cache-Control: no-store</code>.
+          </Guarantee>
+        </UnderTheHood>
       </Layout>
     </>
   )

@@ -4,7 +4,13 @@ import { createRoot } from 'react-dom/client'
 
 const pages = import.meta.glob('./pages/**/*.tsx')
 
+// The server template's static <title> lacks Inertia's `inertia` marker, so it
+// would shadow every <Head title>. Remove it before Inertia manages the head.
+document.head.querySelector('title:not([inertia])')?.remove()
+
 createInertiaApp({
+  title: (title) =>
+    title ? `${title} · popcomputer/web demo` : 'popcomputer/web demo',
   defaults: {
     future: {
       useScriptElementForInitialPage: true,

@@ -76,7 +76,10 @@ export function registerRoutes(app: Hono<AppEnv>) {
     .middleware(requireAuthenticatedRequest)
     .provide(RequireAuthLayer)
 
-  authenticated.get('/', showDashboard, { name: 'dashboard.show' })
+  authenticated
+    .provide(ProjectApplicationLive)
+    .provide(BetterAuthSessionLifecycleLayer)
+    .get('/', showDashboard, { name: 'dashboard.show' })
 
   authenticated
     .provide(BetterAuthSessionLifecycleLayer)

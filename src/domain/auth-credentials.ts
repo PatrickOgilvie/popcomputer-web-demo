@@ -21,7 +21,7 @@ const AuthSecretText = S.String.check(
   S.isMinLength(32, {
     message: 'The authentication secret must contain at least 32 characters.',
   }),
-  S.isPattern(/^\S+$/, {
+  S.isPattern(/^\S+$/u, {
     message: 'The authentication secret must not contain whitespace.',
   })
 )

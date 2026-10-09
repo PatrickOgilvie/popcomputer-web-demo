@@ -1,53 +1,42 @@
 import { Head, useForm, usePage } from '@inertiajs/react'
+import { Globe, Laptop, Smartphone } from 'lucide-react'
 import { useState } from 'react'
 
-import type { SessionSummary } from '~/presentation/session'
+import { buttonClassName } from '~/components/button'
 import ConfirmationDialog from '~/components/ConfirmationDialog'
+import { formatDate, formatDateTime, formatRelativeTime } from '~/components/format'
 import Layout from '~/components/Layout'
+import PageHeader from '~/components/PageHeader'
+import { describeSessionDevice, type SessionDevice } from '~/components/session-device'
+import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
+import type { SessionSummary } from '~/presentation/session'
 import type { PageProps } from '~/types'
 
 type SessionsPageProps = PageProps<{
   readonly sessions: ReadonlyArray<SessionSummary>
 }>
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
+const deviceIcons = {
+  desktop: Laptop,
+  mobile: Smartphone,
+  unknown: Globe,
+} as const satisfies Record<SessionDevice['kind'], unknown>
 
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.format(date)
+/** Current device first, then the most recently active. */
+function orderSessions(
+  sessions: ReadonlyArray<SessionSummary>
+): ReadonlyArray<SessionSummary> {
+  return [...sessions].sort((left, right) => {
+    if (left.isCurrent !== right.isCurrent) return left.isCurrent ? -1 : 1
+    return Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
+  })
 }
 
-function describeDevice(userAgent: string | null): string {
-  if (!userAgent) return 'Unknown device'
-  if (/iPad|iPhone|iPod/.test(userAgent)) return 'Apple mobile device'
-  if (/Android/.test(userAgent)) return 'Android device'
-  if (/Macintosh|Mac OS X/.test(userAgent)) return 'Mac'
-  if (/Windows/.test(userAgent)) return 'Windows device'
-  if (/Linux/.test(userAgent)) return 'Linux device'
-  return 'Web browser'
-}
-
-function SessionIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3" y="4" width="18" height="13" rx="2" />
-      <path d="M8 21h8M12 17v4" />
-    </svg>
-  )
-}
-
-function SessionCard({ session }: { readonly session: SessionSummary }) {
-  const {
-    post,
-    processing,
-    errors: revokeErrors,
-    clearErrors,
-  } = useForm({ sessionId: session.id })
+function SessionRow({ session }: { readonly session: SessionSummary }) {
+  const { post, processing, errors, clearErrors } = useForm({ sessionId: session.id })
   const [confirmsRevoke, setConfirmsRevoke] = useState(false)
-  const device = describeDevice(session.userAgent)
+  const device = describeSessionDevice(session.userAgent)
+  const Icon = deviceIcons[device.kind]
 
   function handleRevoke() {
     post('/sessions/revoke', {
@@ -56,91 +45,83 @@ function SessionCard({ session }: { readonly session: SessionSummary }) {
     })
   }
 
-  function openRevokeDialog() {
-    clearErrors()
-    setConfirmsRevoke(true)
-  }
-
   return (
-    <li className="session-card">
-      <div className="session-icon">
-        <SessionIcon />
-      </div>
-      <div className="session-details">
-        <div className="session-title-row">
-          <h2>{device}</h2>
-          {session.isCurrent ? (
-            <span className="current-session-badge">
-              <span aria-hidden="true" />
-              This device
-            </span>
-          ) : null}
+    <li className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:px-6">
+      <div className="flex min-w-0 flex-1 gap-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+          <Icon className="size-5 text-zinc-600 dark:text-zinc-300" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium">{device.label}</h2>
+            {session.isCurrent ? (
+              <span className="inline-flex h-6 items-center rounded-full bg-emerald-50 px-2.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-600/20 ring-inset dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20">
+                This device
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-pretty text-zinc-600 tabular-nums dark:text-zinc-400">
+            {session.isCurrent ? 'Active now' : (
+              <>
+                Active{' '}
+                <time dateTime={session.updatedAt} title={formatDateTime(session.updatedAt)}>
+                  {formatRelativeTime(session.updatedAt)}
+                </time>
+              </>
+            )}
+            <span aria-hidden="true"> · </span>
+            Signed in <time dateTime={session.createdAt}>{formatDate(session.createdAt)}</time>
+            <span aria-hidden="true"> · </span>
+            Expires <time dateTime={session.expiresAt}>{formatDate(session.expiresAt)}</time>
+          </p>
+          <p className="mt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+            {session.ipAddress ?? 'IP address unavailable'}
+          </p>
         </div>
-        <dl className="session-meta">
-          <div>
-            <dt>Last active</dt>
-            <dd>
-              <time dateTime={session.updatedAt}>
-                {formatDateTime(session.updatedAt)}
-              </time>
-            </dd>
-          </div>
-          <div>
-            <dt>IP address</dt>
-            <dd>{session.ipAddress ?? 'Unavailable'}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>
-              <time dateTime={session.createdAt}>
-                {formatDateTime(session.createdAt)}
-              </time>
-            </dd>
-          </div>
-          <div>
-            <dt>Expires</dt>
-            <dd>
-              <time dateTime={session.expiresAt}>
-                {formatDateTime(session.expiresAt)}
-              </time>
-            </dd>
-          </div>
-        </dl>
       </div>
 
-      {!session.isCurrent ? (
-        <button
-          type="button"
-          className="danger-outline-button session-revoke-button"
-          disabled={processing}
-          aria-label={`Revoke ${device} session last active ${formatDateTime(session.updatedAt)}`}
-          onClick={openRevokeDialog}
-        >
-          Revoke
-        </button>
-      ) : null}
-
-      <ConfirmationDialog
-        open={confirmsRevoke}
-        title="Revoke this session?"
-        description={`This will sign ${device.toLowerCase()} out of your account. You can sign in again later.`}
-        confirmLabel="Revoke session"
-        busyLabel="Revoking…"
-        busy={processing}
-        error={confirmsRevoke ? revokeErrors.sessionId : undefined}
-        onCancel={() => setConfirmsRevoke(false)}
-        onConfirm={handleRevoke}
-      />
+      {session.isCurrent ? (
+        <p className="hidden text-sm text-zinc-500 sm:block sm:w-44 sm:text-right dark:text-zinc-400">
+          Use Sign out in the account menu
+        </p>
+      ) : (
+        <ConfirmationDialog
+          open={confirmsRevoke}
+          onOpenChange={(open) => {
+            if (open) clearErrors()
+            setConfirmsRevoke(open)
+          }}
+          trigger={
+            <button
+              type="button"
+              disabled={processing}
+              aria-label={`Sign out ${device.label}, last active ${formatDateTime(session.updatedAt)}`}
+              className={buttonClassName({ variant: 'secondary', size: 'sm', className: 'self-start sm:self-auto' })}
+            >
+              Sign out
+            </button>
+          }
+          title={`Sign out ${device.label}?`}
+          description="That device will need to sign in again to reach your account. Your current device stays signed in."
+          confirmLabel="Sign out device"
+          busyLabel="Signing out…"
+          busy={processing}
+          error={confirmsRevoke ? errors.sessionId : undefined}
+          onConfirm={handleRevoke}
+        />
+      )}
     </li>
   )
 }
 
-/** Presents active sessions and server-owned revocation controls. */
+/** Lists signed-in devices with server-owned, token-free revocation. */
 export default function SessionsIndex() {
   const { sessions, errors } = usePage<SessionsPageProps>().props
+  const ordered = orderSessions(sessions)
   const otherSessionCount = sessions.filter((session) => !session.isCurrent).length
   const { post, processing } = useForm({})
   const [confirmsRevokeOthers, setConfirmsRevokeOthers] = useState(false)
+  const otherDevices = `${otherSessionCount} other ${otherSessionCount === 1 ? 'device' : 'devices'}`
 
   function handleRevokeOthers() {
     post('/sessions/revoke-others', {
@@ -151,78 +132,83 @@ export default function SessionsIndex() {
 
   return (
     <>
-      <Head title="Active sessions">
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
-      <Layout breadcrumbs={[{ label: 'Sessions' }]}>
-        <div className="sessions-page">
-          <section className="sessions-panel" aria-labelledby="sessions-title">
-            <header className="sessions-header">
-              <div className="page-heading">
-                <p className="eyebrow">Effect-native Better Auth</p>
-                <h1 id="sessions-title">Active sessions</h1>
-                <p>
-                  Review signed-in devices and revoke access without exposing
-                  authentication tokens to the browser.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={processing || otherSessionCount === 0}
-                className="dark-button"
-                onClick={() => setConfirmsRevokeOthers(true)}
-              >
-                {otherSessionCount === 0
-                  ? 'No other sessions'
-                  : `Revoke ${otherSessionCount === 1 ? 'other session' : 'other sessions'}`}
-              </button>
-            </header>
+      <Head title="Signed-in devices" />
+      <Layout>
+        <PageHeader
+          title="Signed-in devices"
+          description="Every device signed in to your account. Sign out any you don’t recognize."
+          actions={
+            otherSessionCount > 0 ? (
+              <ConfirmationDialog
+                open={confirmsRevokeOthers}
+                onOpenChange={setConfirmsRevokeOthers}
+                trigger={
+                  <button
+                    type="button"
+                    disabled={processing}
+                    className={buttonClassName({ variant: 'dangerOutline' })}
+                  >
+                    Sign out {otherDevices}
+                  </button>
+                }
+                title={`Sign out ${otherDevices}?`}
+                description="They’ll need to sign in again. This device stays signed in."
+                confirmLabel={`Sign out ${otherDevices}`}
+                busyLabel="Signing out…"
+                busy={processing}
+                onConfirm={handleRevokeOthers}
+              />
+            ) : undefined
+          }
+        />
 
-            <div className="sessions-list-shell">
-              {errors?.sessionId ? (
-                <p className="field-error session-error" role="alert">
-                  {errors.sessionId}
-                </p>
-              ) : null}
-              <div className="sessions-summary">
-                <p>
-                  {sessions.length} active{' '}
-                  {sessions.length === 1 ? 'session' : 'sessions'}
-                </p>
-                <span>Tokens stay server-side</span>
-              </div>
-              {sessions.length > 0 ? (
-                <ul className="sessions-list" aria-label="Active sessions">
-                  {sessions.map((session) => (
-                    <SessionCard key={session.id} session={session} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="sessions-empty">No active sessions were returned.</p>
-              )}
-            </div>
-          </section>
-        </div>
+        {errors?.sessionId ? (
+          <p
+            role="alert"
+            className="rounded-md bg-red-50 px-4 py-3 text-sm text-pretty text-red-800 dark:bg-red-950/50 dark:text-red-300"
+          >
+            {errors.sessionId}
+          </p>
+        ) : null}
+
+        <section
+          aria-label="Signed-in devices"
+          className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <div className="flex items-center justify-between gap-4 border-b border-zinc-200 bg-zinc-50 px-5 py-2.5 text-xs font-medium text-zinc-500 sm:px-6 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            <span className="tabular-nums">
+              {sessions.length} {sessions.length === 1 ? 'device' : 'devices'}
+            </span>
+            <span>Up to 5 are kept per account</span>
+          </div>
+          {ordered.length > 0 ? (
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {ordered.map((session) => (
+                <SessionRow key={session.id} session={session} />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-6 py-8 text-center text-sm text-zinc-600 dark:text-zinc-400">
+              No active sessions were returned.
+            </p>
+          )}
+        </section>
+
+        <UnderTheHood route="GET /sessions" name="sessions.index">
+          <Guarantee>
+            Session tokens never reach the browser; signing a device out posts only
+            its session ID.
+          </Guarantee>
+          <Guarantee>
+            The database keeps at most five sessions per account; a sixth sign-in
+            retires the oldest.
+          </Guarantee>
+          <Guarantee>
+            Signing out revokes the session on the server before the cookie is
+            cleared.
+          </Guarantee>
+        </UnderTheHood>
       </Layout>
-
-      <ConfirmationDialog
-        open={confirmsRevokeOthers}
-        title={
-          otherSessionCount === 1
-            ? 'Revoke the other session?'
-            : 'Revoke other sessions?'
-        }
-        description={`This will sign out ${otherSessionCount} ${otherSessionCount === 1 ? 'other device' : 'other devices'}. Your current session will stay active.`}
-        confirmLabel={
-          otherSessionCount === 1
-            ? 'Revoke other session'
-            : 'Revoke other sessions'
-        }
-        busyLabel="Revoking…"
-        busy={processing}
-        onCancel={() => setConfirmsRevokeOthers(false)}
-        onConfirm={handleRevokeOthers}
-      />
     </>
   )
 }

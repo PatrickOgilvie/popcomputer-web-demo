@@ -2,9 +2,12 @@ import { Head, Link, useForm } from '@inertiajs/react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
+import { buttonClassName } from '~/components/button'
 import Layout from '~/components/Layout'
+import PageHeader from '~/components/PageHeader'
 import ProjectFormFields from '~/components/ProjectFormFields'
 import type { ProjectFormValues } from '~/components/ProjectFormFields'
+import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
 
 interface CreateProjectForm extends ProjectFormValues {
   readonly id: string
@@ -53,64 +56,55 @@ export default function CreateProject() {
 
   return (
     <>
-      <Head title="Create project">
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
-      <Layout
-        breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
-          { label: 'Create' },
-        ]}
-      >
-        <div className="content-narrow">
-          <header className="page-heading">
-            <p className="eyebrow">Schema-validated write</p>
-            <h1>Create a project</h1>
-            <p>
-              Unknown fields are rejected and failures remain typed all the way
-              back to this form.
-            </p>
-          </header>
+      <Head title="New project" />
+      <Layout>
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
+          <PageHeader
+            title="New project"
+            breadcrumbs={[{ label: 'Projects', href: '/projects' }, { label: 'New' }]}
+            description="You can change any of this later, including who can see it."
+          />
 
           <form
             ref={formRef}
-            className="form-card"
             noValidate
             onSubmit={handleSubmit}
+            className="rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
           >
-            <ProjectFormFields
-              data={data}
-              errors={errors}
-              disabled={processing}
-              onChange={updateField}
-            />
-
-            <div className="form-actions">
-              <Link href="/projects" className="secondary-link">
+            <div className="p-5 sm:p-6">
+              <ProjectFormFields
+                data={data}
+                errors={errors}
+                disabled={processing}
+                onChange={updateField}
+              />
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-zinc-800">
+              <Link href="/projects" className={buttonClassName({ variant: 'ghost' })}>
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={processing}
-                className="primary-button primary-button--inline"
                 aria-busy={processing}
+                className={buttonClassName()}
               >
-                {processing ? (
-                  <svg
-                    className="button-spinner"
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <circle cx="10" cy="10" r="7" />
-                  </svg>
-                ) : null}
-                <span aria-live="polite">
-                  {processing ? 'Creating…' : 'Create project'}
-                </span>
+                <span aria-live="polite">{processing ? 'Creating…' : 'Create project'}</span>
               </button>
             </div>
           </form>
+
+          <UnderTheHood route="POST /projects" name="projects.store" compact>
+            <Guarantee>
+              The form carries a client-generated ID, so a retried submit never
+              creates a duplicate.
+            </Guarantee>
+            <Guarantee>
+              Unknown fields are rejected and bodies over 8 KiB are refused before
+              parsing.
+            </Guarantee>
+            <Guarantee>D1 caps each account at 100 project IDs over its lifetime.</Guarantee>
+          </UnderTheHood>
         </div>
       </Layout>
     </>

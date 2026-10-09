@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
 import AuthShell from '~/components/AuthShell'
+import { buttonClassName } from '~/components/button'
 import TextField from '~/components/TextField'
 
 export default function Login() {
@@ -26,22 +27,22 @@ export default function Login() {
 
   return (
     <>
-      <Head title="Sign in">
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
+      <Head title="Sign in" />
       <AuthShell
-        title="Welcome back"
-        description="Sign in to continue exploring a server-driven React app at the edge."
-        alternatePrompt="New to the demo?"
+        title="Sign in"
+        description="Pick up where you left off with your projects and devices."
+        alternatePrompt="New here?"
         alternateHref="/register"
         alternateLabel="Create an account"
+        route="POST /login"
+        routeName="login.store"
       >
-        <form ref={formRef} className="auth-form" onSubmit={handleSubmit}>
+        <form ref={formRef} className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <TextField
             id="email"
             name="email"
             type="email"
-            label="Email address"
+            label="Email"
             autoComplete="email"
             spellCheck={false}
             required
@@ -66,26 +67,13 @@ export default function Login() {
               clearErrors('password')
             }}
           />
-
           <button
             type="submit"
             disabled={processing}
-            className="primary-button"
             aria-busy={processing}
+            className={buttonClassName({ className: 'mt-1 w-full' })}
           >
-            {processing ? (
-              <svg
-                className="button-spinner"
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <circle cx="10" cy="10" r="7" />
-              </svg>
-            ) : null}
-            <span aria-live="polite">
-              {processing ? 'Signing in…' : 'Sign in'}
-            </span>
+            <span aria-live="polite">{processing ? 'Signing in…' : 'Sign in'}</span>
           </button>
         </form>
       </AuthShell>

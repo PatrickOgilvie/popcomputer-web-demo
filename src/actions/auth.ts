@@ -63,10 +63,12 @@ const mapRegisterError = (error: BetterAuthActionError): Record<string, string> 
     case 'USER_ALREADY_EXISTS':
     case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
       return { email: 'Email is already in use' }
-    case 'INVALID_PASSWORD':
     case 'PASSWORD_TOO_SHORT':
+      return { password: 'Use at least 8 characters' }
     case 'PASSWORD_TOO_LONG':
-      return { password: 'Invalid password' }
+      return { password: 'Use 128 characters or fewer' }
+    case 'INVALID_PASSWORD':
+      return { password: 'Choose a different password' }
     case 'CROSS_SITE_NAVIGATION_LOGIN_BLOCKED':
     case 'INVALID_ORIGIN':
     case 'MISSING_OR_NULL_ORIGIN':
