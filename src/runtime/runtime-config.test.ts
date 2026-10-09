@@ -9,7 +9,7 @@ const validBindings = {
   BETTER_AUTH_SECRET: 'a-high-entropy-secret-with-32-characters',
   BETTER_AUTH_TRUSTED_ORIGINS:
     ' https://admin.example.com ,https://ops.example.com ',
-  DEV_VITE_PORT: '5174',
+  DEV_VITE_ORIGIN: 'https://vite.popcomputer-web-demo.localhost',
 } as const
 
 describe('runtime configuration', () => {
@@ -22,7 +22,9 @@ describe('runtime configuration', () => {
       'https://admin.example.com',
       'https://ops.example.com',
     ])
-    expect(config.vitePort).toBe(5174)
+    expect(config.viteOrigin.origin).toBe(
+      'https://vite.popcomputer-web-demo.localhost'
+    )
     expect(Redacted.value(config.authSecret)).toBe(
       validBindings.BETTER_AUTH_SECRET
     )
@@ -31,7 +33,7 @@ describe('runtime configuration', () => {
     )
   })
 
-  test('uses the default Vite port and no additional origins when absent', async () => {
+  test('uses the default Vite origin and no additional origins when absent', async () => {
     const config = await Effect.runPromise(
       parseRuntimeConfig({
         ENVIRONMENT: 'development',
@@ -40,7 +42,7 @@ describe('runtime configuration', () => {
       })
     )
 
-    expect(config.vitePort).toBe(5173)
+    expect(config.viteOrigin.origin).toBe('http://localhost:5173')
     expect(config.trustedOrigins).toEqual([])
   })
 
@@ -112,8 +114,14 @@ describe('runtime configuration', () => {
         BETTER_AUTH_TRUSTED_ORIGINS: 'https://*.example.com',
       },
     ],
-    ['DEV_VITE_PORT', { ...validBindings, DEV_VITE_PORT: '70000' }],
-    ['DEV_VITE_PORT', { ...validBindings, DEV_VITE_PORT: '1e3' }],
+    [
+      'DEV_VITE_ORIGIN',
+      { ...validBindings, DEV_VITE_ORIGIN: 'http://localhost:70000' },
+    ],
+    [
+      'DEV_VITE_ORIGIN',
+      { ...validBindings, DEV_VITE_ORIGIN: 'https://vite.localhost/path' },
+    ],
   ] as const)('rejects invalid %s without retaining its value', async (field, input) => {
     const exit = await Effect.runPromiseExit(parseRuntimeConfig(input))
 

@@ -1,155 +1,147 @@
 import concurrently from 'concurrently'
-import { createServer } from 'node:net'
+import { execFileSync } from 'node:child_process'
 
 import {
-  createDevServerEnvironment,
-  DEFAULT_VITE_PORT,
-  DEFAULT_WORKER_PORT,
+  DIRECT_VITE_PORT,
+  DIRECT_WORKER_PORT,
+  type DevServerEnvironment,
+  InvalidDevOrigin,
+  readDevOrigin,
+  VITE_ROUTE_NAME,
 } from './dev-environment'
 
-const MAX_PORT_OFFSET = 100
-const LOOPBACK_HOSTS = ['127.0.0.1', '::1'] as const
-
-type PortAvailability = (port: number) => Promise<boolean>
-
-/** The paired ports used by the local Worker and Vite development servers. */
-export interface DevServerPorts {
-  readonly offset: number
-  readonly worker: number
-  readonly vite: number
+/** How the paired development servers listen and how browsers reach them. */
+export interface DevSession {
+  readonly mode: 'portless' | 'direct'
+  readonly workerPort: number
+  readonly workerOrigin: URL
+  readonly viteOrigin: URL
 }
 
-class DevPortProbeError extends Error {
-  readonly _tag = 'DevPortProbeError' as const
+/** Values portless injects into the process it runs for the Worker route. */
+export interface PortlessProcessEnvironment {
+  readonly PORT?: string
+  readonly PORTLESS_URL?: string
+}
 
-  constructor(
-    readonly port: number,
-    readonly host: string,
-    cause: unknown
-  ) {
-    super(`Could not check development port ${port} on ${host}.`, { cause })
+type PortlessUrlResolver = (routeName: string) => string
+
+/** Portless assigned the Worker route an unusable port. */
+export class InvalidPortlessPort extends Error {
+  readonly _tag = 'InvalidPortlessPort' as const
+
+  constructor() {
+    super('portless must provide PORT as an integer between 1 and 65535.')
   }
 }
 
-function readErrorCode(cause: unknown): string | undefined {
-  if (typeof cause !== 'object' || cause === null || !('code' in cause)) {
-    return undefined
+function readPortlessPort(value: string | undefined): number {
+  const port = Number(value)
+  if (value === undefined || !/^[1-9]\d*$/.test(value) || port > 65_535) {
+    throw new InvalidPortlessPort()
   }
 
-  const code = Reflect.get(cause, 'code')
-  return typeof code === 'string' ? code : undefined
+  return port
 }
 
-function canListenOnHost(port: number, host: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
+/** Resolves a sibling route with the same worktree prefix and proxy state. */
+const resolvePortlessUrl: PortlessUrlResolver = (routeName) =>
+  execFileSync('portless', ['get', routeName], { encoding: 'utf8' }).trim()
 
-    server.once('error', (cause: unknown) => {
-      const code = readErrorCode(cause)
-      if (code === 'EADDRINUSE') {
-        resolve(false)
-        return
-      }
-      if (code === 'EADDRNOTAVAIL' || code === 'EAFNOSUPPORT') {
-        resolve(true)
-        return
-      }
-
-      reject(new DevPortProbeError(port, host, cause))
-    })
-    server.listen({ host, port, exclusive: true }, () => {
-      server.close((cause) => {
-        if (cause !== undefined) {
-          reject(new DevPortProbeError(port, host, cause))
-          return
-        }
-        resolve(true)
-      })
-    })
-  })
-}
-
-async function isPortAvailable(port: number): Promise<boolean> {
-  for (const host of LOOPBACK_HOSTS) {
-    if (!(await canListenOnHost(port, host))) return false
-  }
-
-  return true
-}
-
-/** Finds the first offset for which both default development ports are free. */
-export async function findDevServerPorts(
-  checkPort: PortAvailability = isPortAvailable
-): Promise<DevServerPorts | undefined> {
-  for (let offset = 0; offset <= MAX_PORT_OFFSET; offset += 1) {
-    const worker = DEFAULT_WORKER_PORT + offset
-    const vite = DEFAULT_VITE_PORT + offset
-    const [workerAvailable, viteAvailable] = await Promise.all([
-      checkPort(worker),
-      checkPort(vite),
-    ])
-
-    if (workerAvailable && viteAvailable) {
-      return { offset, worker, vite }
+/**
+ * Reads the Worker route portless assigned to this process and resolves the
+ * matching Vite route. Without portless (`PORTLESS=0`), both servers use one
+ * fixed loopback pair and fail fast if either port is already taken.
+ */
+export function readDevSession(
+  environment: PortlessProcessEnvironment,
+  resolveUrl: PortlessUrlResolver = resolvePortlessUrl
+): DevSession {
+  if (environment.PORTLESS_URL === undefined) {
+    return {
+      mode: 'direct',
+      workerPort: DIRECT_WORKER_PORT,
+      workerOrigin: new URL(`http://localhost:${DIRECT_WORKER_PORT}`),
+      viteOrigin: new URL(`http://localhost:${DIRECT_VITE_PORT}`),
     }
   }
 
-  return undefined
+  return {
+    mode: 'portless',
+    workerPort: readPortlessPort(environment.PORT),
+    workerOrigin: readDevOrigin('PORTLESS_URL', environment.PORTLESS_URL),
+    viteOrigin: readDevOrigin(
+      `portless get ${VITE_ROUTE_NAME}`,
+      resolveUrl(VITE_ROUTE_NAME)
+    ),
+  }
 }
 
-/** Builds the Worker command with configuration matching the selected pair. */
-export function createWorkerDevCommand(ports: DevServerPorts): string {
-  const environment = createDevServerEnvironment(ports)
+/** Builds the inherited environment Vite reads for CORS and asset origins. */
+export function createDevServerEnvironment(
+  session: DevSession
+): DevServerEnvironment {
+  return {
+    DEV_VITE_ORIGIN: session.viteOrigin.origin,
+    DEV_WORKER_ORIGIN: session.workerOrigin.origin,
+  }
+}
+
+/**
+ * Builds both server commands. Wrangler listens on the assigned loopback port
+ * but sees requests at the public origin, so same-origin checks and Better
+ * Auth agree with the browser even when portless terminates HTTPS.
+ */
+export function createDevCommands(
+  session: DevSession
+): ReadonlyArray<{ readonly name: string; readonly command: string }> {
+  const vite =
+    session.mode === 'portless'
+      ? `portless run --name ${VITE_ROUTE_NAME} vite`
+      : `vite --port ${DIRECT_VITE_PORT} --strictPort`
+  const worker = [
+    'bun run dev:worker --',
+    `--port ${session.workerPort}`,
+    '--ip 127.0.0.1',
+    `--local-upstream ${session.workerOrigin.host}`,
+    `--upstream-protocol ${session.workerOrigin.protocol.slice(0, -1)}`,
+    '--var ENVIRONMENT:development',
+    `--var APP_ORIGIN:${session.workerOrigin.origin}`,
+    `--var DEV_VITE_ORIGIN:${session.viteOrigin.origin}`,
+  ].join(' ')
 
   return [
-    'bun run dev:worker --',
-    `--port ${ports.worker}`,
-    '--var ENVIRONMENT:development',
-    `--var APP_ORIGIN:${environment.DEV_WORKER_ORIGIN}`,
-    `--var DEV_VITE_PORT:${ports.vite}`,
-  ].join(' ')
+    { name: 'vite', command: vite },
+    { name: 'worker', command: worker },
+  ]
 }
 
 async function runDevelopmentServers(): Promise<number> {
-  let ports: DevServerPorts | undefined
+  let session: DevSession
   try {
-    ports = await findDevServerPorts()
+    session = readDevSession({
+      PORT: process.env.PORT,
+      PORTLESS_URL: process.env.PORTLESS_URL,
+    })
   } catch (cause: unknown) {
-    if (cause instanceof DevPortProbeError) {
+    if (cause instanceof InvalidDevOrigin || cause instanceof InvalidPortlessPort) {
       console.error(cause.message)
       return 1
     }
     throw cause
   }
 
-  if (ports === undefined) {
-    console.error('Could not find an available port pair for Wrangler and Vite.')
-    return 1
-  }
+  Object.assign(process.env, createDevServerEnvironment(session))
 
-  Object.assign(process.env, createDevServerEnvironment(ports))
-
-  if (ports.offset > 0) {
-    console.log(`Default ports are busy; shifted both servers by ${ports.offset}.`)
-  }
   console.log(
-    `Worker: http://localhost:${ports.worker} · Vite: http://localhost:${ports.vite}`
+    `App: ${session.workerOrigin.origin} · Vite: ${session.viteOrigin.origin}`
   )
 
-  const { result } = concurrently(
-    [
-      { command: 'bun run dev:vite', name: 'vite' },
-      {
-        command: createWorkerDevCommand(ports),
-        name: 'worker',
-      },
-    ],
-    {
-      killOthersOn: ['failure', 'success'],
-      prefix: 'name',
-      prefixColors: ['magenta', 'cyan'],
-    }
-  )
+  const { result } = concurrently([...createDevCommands(session)], {
+    killOthersOn: ['failure', 'success'],
+    prefix: 'name',
+    prefixColors: ['magenta', 'cyan'],
+  })
 
   try {
     await result

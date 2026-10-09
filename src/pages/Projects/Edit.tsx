@@ -1,10 +1,14 @@
 import { Head, Link, useForm } from '@inertiajs/react'
+import { TriangleAlert } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
+import { buttonClassName } from '~/components/button'
 import Layout from '~/components/Layout'
+import PageHeader from '~/components/PageHeader'
 import ProjectFormFields from '~/components/ProjectFormFields'
 import type { ProjectFormValues } from '~/components/ProjectFormFields'
+import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
 import type { ProjectDetail } from '~/presentation/project'
 
 interface EditProjectProps {
@@ -18,6 +22,7 @@ interface UpdateProjectFormValues extends ProjectFormValues {
 /** Updates an owner-scoped project through a strict Effect action. */
 export default function EditProject({ project }: EditProjectProps) {
   const formRef = useRef<HTMLFormElement>(null)
+  const projectPath = `/projects/${encodeURIComponent(project.id)}`
   const { data, setData, put, processing, errors, clearErrors } =
     useForm<UpdateProjectFormValues>({
       name: project.name,
@@ -53,92 +58,85 @@ export default function EditProject({ project }: EditProjectProps) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    put(`/projects/${encodeURIComponent(project.id)}`)
+    put(projectPath)
   }
 
   return (
     <>
-      <Head title={`Edit ${project.name}`}>
-        <meta name="theme-color" content="#f5f3ee" />
-      </Head>
-      <Layout
-        breadcrumbs={[
-          { label: 'Projects', href: '/projects' },
-          {
-            label: project.name,
-            href: `/projects/${encodeURIComponent(project.id)}`,
-          },
-          { label: 'Edit' },
-        ]}
-      >
-        <div className="content-narrow">
-          <header className="page-heading">
-            <p className="eyebrow">Owner-scoped update</p>
-            <h1>Edit project</h1>
-            <p>
-              The project service resolves this record within your owner scope
-              before the strict update form is parsed.
-            </p>
-          </header>
+      <Head title={`Edit ${project.name}`} />
+      <Layout>
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
+          <PageHeader
+            title="Edit project"
+            breadcrumbs={[
+              { label: 'Projects', href: '/projects' },
+              { label: project.name, href: projectPath },
+              { label: 'Edit' },
+            ]}
+            meta={<span className="tabular-nums">Editing revision {project.revision}</span>}
+          />
 
           <form
             ref={formRef}
-            className="form-card"
             noValidate
             onSubmit={handleSubmit}
+            className="rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
           >
             {errors.expectedRevision ? (
-              <div className="form-conflict" role="alert" tabIndex={-1}>
-                <p>{errors.expectedRevision}</p>
+              <div
+                role="alert"
+                tabIndex={-1}
+                className="flex flex-col gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4 focus:outline-none sm:flex-row sm:items-center sm:px-6 dark:border-amber-900/60 dark:bg-amber-950/30"
+              >
+                <TriangleAlert
+                  className="size-5 shrink-0 text-amber-700 dark:text-amber-400"
+                  aria-hidden="true"
+                />
+                <p className="flex-1 text-sm text-pretty text-amber-900 dark:text-amber-200">
+                  {errors.expectedRevision}
+                </p>
                 <Link
-                  href={`/projects/${encodeURIComponent(project.id)}/edit`}
-                  className="secondary-link"
+                  href={`${projectPath}/edit`}
+                  className={buttonClassName({ variant: 'secondary', size: 'sm' })}
                 >
-                  Reload latest version
+                  Load latest version
                 </Link>
               </div>
             ) : null}
-            <ProjectFormFields
-              data={data}
-              errors={errors}
-              disabled={processing}
-              onChange={updateField}
-            />
-            <input
-              type="hidden"
-              name="expectedRevision"
-              value={data.expectedRevision}
-            />
-
-            <div className="form-actions">
-              <Link
-                href={`/projects/${encodeURIComponent(project.id)}`}
-                className="secondary-link"
-              >
+            <div className="p-5 sm:p-6">
+              <ProjectFormFields
+                data={data}
+                errors={errors}
+                disabled={processing}
+                onChange={updateField}
+              />
+            </div>
+            <input type="hidden" name="expectedRevision" value={data.expectedRevision} />
+            <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-zinc-800">
+              <Link href={projectPath} className={buttonClassName({ variant: 'ghost' })}>
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={processing}
-                className="primary-button primary-button--inline"
                 aria-busy={processing}
+                className={buttonClassName()}
               >
-                {processing ? (
-                  <svg
-                    className="button-spinner"
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <circle cx="10" cy="10" r="7" />
-                  </svg>
-                ) : null}
-                <span aria-live="polite">
-                  {processing ? 'Saving…' : 'Save changes'}
-                </span>
+                <span aria-live="polite">{processing ? 'Saving…' : 'Save changes'}</span>
               </button>
             </div>
           </form>
+
+          <UnderTheHood route="PUT /projects/:project" name="projects.update" compact>
+            <Guarantee>
+              The project is found within your account before the request body is
+              read.
+            </Guarantee>
+            <Guarantee>
+              Saving sends revision {project.revision}; if someone saved a newer
+              version first, this save fails instead of overwriting it.
+            </Guarantee>
+          </UnderTheHood>
         </div>
       </Layout>
     </>

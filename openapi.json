@@ -27,11 +27,7 @@
                       "items": {
                         "$ref": "#/$defs/ProjectDetail"
                       },
-                      "allOf": [
-                        {
-                          "maxItems": 100
-                        }
-                      ]
+                      "maxItems": 100
                     }
                   },
                   "required": [
@@ -45,31 +41,17 @@
                       "properties": {
                         "id": {
                           "type": "string",
-                          "allOf": [
-                            {
-                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$",
-                              "format": "uuid"
-                            }
-                          ]
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$",
+                          "format": "uuid"
                         },
                         "name": {
                           "type": "string",
-                          "allOf": [
-                            {
-                              "minLength": 1
-                            },
-                            {
-                              "maxLength": 100
-                            }
-                          ]
+                          "minLength": 1,
+                          "maxLength": 100
                         },
                         "description": {
                           "type": "string",
-                          "allOf": [
-                            {
-                              "maxLength": 500
-                            }
-                          ]
+                          "maxLength": 500
                         },
                         "visibility": {
                           "type": "string",
@@ -81,29 +63,17 @@
                         "updatedAt": {
                           "type": "string",
                           "format": "date-time",
-                          "allOf": [
-                            {
-                              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
-                            }
-                          ]
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
                         },
                         "revision": {
                           "type": "integer",
-                          "allOf": [
-                            {
-                              "minimum": 1,
-                              "maximum": 9007199254740991
-                            }
-                          ]
+                          "minimum": 1,
+                          "maximum": 9007199254740991
                         },
                         "createdAt": {
                           "type": "string",
                           "format": "date-time",
-                          "allOf": [
-                            {
-                              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
-                            }
-                          ]
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
                         }
                       },
                       "required": [

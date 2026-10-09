@@ -29,6 +29,14 @@ import manifest from '../dist/manifest.json'
 const assetVersion = createVersion(manifest)
 const entry = manifest['src/main.tsx']
 
+// Browser chrome follows the page canvas in both color schemes.
+const documentHead = [
+  '<meta name="color-scheme" content="light dark">',
+  '<link rel="icon" href="/favicon.svg" type="image/svg+xml">',
+  '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">',
+  '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b">',
+].join('\n    ')
+
 const observeEffectError = Effect.fn('PopcomputerWebDemo.observeEffectError')(
   function* (event: EffectErrorEvent) {
     yield* Effect.sync(() => {
@@ -69,20 +77,19 @@ setupWeb(app, {
     const config = ctx.var.runtimeConfig
     const isDev = config.mode === 'development'
     if (isDev) {
-      const vitePort = config.vitePort
       return {
-        title: '@popcomputer/web Demo',
-        scripts: [vite.script('/src/main.tsx', vitePort)],
+        title: 'popcomputer/web demo',
+        scripts: [vite.script('/src/main.tsx', config.viteOrigin)],
         styles: [],
-        head: vite.hmrHead(vitePort),
+        head: `${documentHead}${vite.hmrHead(config.viteOrigin)}`,
       }
     }
 
     return {
-      title: '@popcomputer/web Demo',
+      title: 'popcomputer/web demo',
       scripts: [`/${entry.file}`],
       styles: (entry.css ?? []).map((asset: string) => `/${asset}`),
-      head: '',
+      head: documentHead,
     }
   }),
   effect: {

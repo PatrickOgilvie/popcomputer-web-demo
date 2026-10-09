@@ -1,11 +1,22 @@
+import { Eye, EyeOff } from 'lucide-react'
 import { useId, useState } from 'react'
-import type { InputHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, ReactNode } from 'react'
+
+import { cn } from '~/components/cn'
+import FieldError from '~/components/FieldError'
+import {
+  fieldControlClassName,
+  fieldHintClassName,
+  fieldLabelClassName,
+} from '~/components/fieldStyles'
 
 interface TextFieldProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> {
   readonly label: string
   readonly error?: string
   readonly hint?: string
+  /** Optional content aligned with the label, such as a counter or link. */
+  readonly labelAside?: ReactNode
 }
 
 /** Renders a labelled input with consistent help, error, and password states. */
@@ -13,6 +24,7 @@ export default function TextField({
   label,
   error,
   hint,
+  labelAside,
   id: providedId,
   type = 'text',
   'aria-describedby': describedByProp,
@@ -25,64 +37,51 @@ export default function TextField({
   const isPassword = type === 'password'
   const [showsPassword, setShowsPassword] = useState(false)
 
-  let describedBy = describedByProp
-  if (hint) {
-    describedBy = describedBy ? `${describedBy} ${hintId}` : hintId
-  }
-  if (error) {
-    describedBy = describedBy ? `${describedBy} ${errorId}` : errorId
-  }
+  const describedBy =
+    [describedByProp, hint ? hintId : undefined, error ? errorId : undefined]
+      .filter(Boolean)
+      .join(' ') || undefined
 
   return (
-    <div className="field">
-      <label htmlFor={id} className="field-label">
-        {label}
-      </label>
-      <div className="field-control" data-invalid={error ? '' : undefined}>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-4">
+        <label htmlFor={id} className={fieldLabelClassName}>
+          {label}
+        </label>
+        {labelAside}
+      </div>
+      <div className="relative">
         <input
           {...inputProps}
           id={id}
           type={isPassword && showsPassword ? 'text' : type}
-          className="field-input"
+          className={cn(fieldControlClassName, 'h-10', isPassword && 'pr-11')}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
         />
         {isPassword ? (
           <button
             type="button"
-            className="password-toggle"
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-orange-600 dark:hover:text-white"
             aria-label={showsPassword ? 'Hide password' : 'Show password'}
             aria-controls={id}
             aria-pressed={showsPassword}
             onClick={() => setShowsPassword((visible) => !visible)}
           >
             {showsPassword ? (
-              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                <path d="M3 3l14 14M8.6 8.7a2 2 0 0 0 2.7 2.7M6.2 5.3A8.4 8.4 0 0 1 10 4.4c4.5 0 7.3 4.4 7.3 4.4a10.8 10.8 0 0 1-2.1 2.5M12.8 14a8.7 8.7 0 0 1-2.8.5c-4.5 0-7.3-4.4-7.3-4.4A11.4 11.4 0 0 1 4.8 7.6" />
-              </svg>
+              <EyeOff className="size-4" aria-hidden="true" />
             ) : (
-              <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                <path d="M2.7 10s2.8-4.5 7.3-4.5 7.3 4.5 7.3 4.5-2.8 4.5-7.3 4.5S2.7 10 2.7 10Z" />
-                <circle cx="10" cy="10" r="2.2" />
-              </svg>
+              <Eye className="size-4" aria-hidden="true" />
             )}
           </button>
         ) : null}
       </div>
       {hint ? (
-        <p id={hintId} className="field-hint">
+        <p id={hintId} className={fieldHintClassName}>
           {hint}
         </p>
       ) : null}
-      {error ? (
-        <p id={errorId} className="field-error" aria-live="polite">
-          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <circle cx="8" cy="8" r="6.25" />
-            <path d="M8 4.8v3.8M8 11.2h.01" />
-          </svg>
-          {error}
-        </p>
-      ) : null}
+      <FieldError id={errorId} message={error} />
     </div>
   )
 }

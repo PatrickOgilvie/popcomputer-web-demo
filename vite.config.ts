@@ -5,6 +5,7 @@ import { resolve } from 'path'
 
 import { readViteDevServerConfiguration } from './scripts/dev-environment'
 
+// `bun run dev` supplies both origins; portless supplies --port and --host.
 const devServer = readViteDevServerConfiguration()
 
 export default defineConfig({
@@ -14,12 +15,13 @@ export default defineConfig({
       '~': resolve(__dirname, 'src'),
     },
   },
-  server: {
-    port: devServer.port,
-    strictPort: true,
-    cors: { origin: devServer.workerOrigin },
-    origin: devServer.viteOrigin,
-  },
+  server:
+    devServer === undefined
+      ? {}
+      : {
+          cors: { origin: devServer.workerOrigin },
+          origin: devServer.viteOrigin,
+        },
   build: {
     manifest: 'manifest.json',
     outDir: 'dist',

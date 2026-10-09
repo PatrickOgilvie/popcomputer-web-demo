@@ -1,30 +1,36 @@
 import { Link } from '@inertiajs/react'
 
-interface BrandProps {
-  readonly tone?: 'dark' | 'light'
-}
+import { cn } from '~/components/cn'
 
-/** Renders the shared package identity and links back to the dashboard. */
-export default function Brand({ tone = 'dark' }: BrandProps) {
+/** Renders the package identity and links back to the dashboard. */
+export default function Brand({ className }: { readonly className?: string }) {
   return (
     <Link
       href="/"
-      className={`brand brand--${tone}`}
-      aria-label="@popcomputer/web demo — dashboard"
+      className={cn(
+        'flex shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600',
+        className
+      )}
+      aria-label="popcomputer/web demo, dashboard"
     >
-      <span className="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 36 36" focusable="false">
-          <rect x="8" y="8" width="7" height="7" rx="2" />
-          <rect x="21" y="21" width="7" height="7" rx="2" />
-          <path d="M15 11.5h2.5a7.5 7.5 0 0 1 7.5 7.5v2" />
-          <path d="M21 24.5h-2.5A7.5 7.5 0 0 1 11 17v-2" />
-        </svg>
+      <svg
+        viewBox="0 0 28 28"
+        className="size-7 shrink-0"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <rect width="28" height="28" rx="7" className="fill-zinc-950 dark:fill-white" />
+        <path
+          d="M11.5 20 16.5 8"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          className="stroke-white dark:stroke-zinc-950"
+        />
+        <circle cx="19.5" cy="18.5" r="2.5" className="fill-orange-500" />
+      </svg>
+      <span className="text-sm font-semibold" translate="no">
+        popcomputer<span className="font-normal text-zinc-500 dark:text-zinc-400">/web</span>
       </span>
-      <span className="brand-lockup" translate="no">
-        <span className="brand-name">@popcomputer</span>
-        <span className="brand-product">/web</span>
-      </span>
-      <span className="brand-badge">Demo</span>
     </Link>
   )
 }

@@ -24,8 +24,12 @@ describe('session actor', () => {
 
     expect(String(actor.userId)).toBe('user-123')
     expect(String(actor.currentSessionId)).toBe('session-current')
-    expect(actor.currentToken).toBe(input.session.token)
+    // Schema.Redacted re-wraps decoded values, so compare the secret, not the box.
     expect(Redacted.isRedacted(actor.currentToken)).toBe(true)
+    expect(Redacted.value(actor.currentToken)).toBe(
+      Redacted.value(input.session.token)
+    )
+    expect(String(actor.currentToken)).not.toContain('current-session-token')
   })
 
   test('rejects an authenticated session owned by a different user', async () => {

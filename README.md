@@ -6,12 +6,14 @@ A Cloudflare Workers demo for [@popcomputer/web](https://github.com/PatrickOgilv
 
 ## Version baseline
 
-The demo is migrated to Effect v4 and intentionally pins its prerelease dependencies exactly:
+The demo pins its framework and Effect versions exactly:
 
-- `@popcomputer/web@0.4.0-rc.1` — the Effect v4 release published on npm's `next` channel
-- `effect@4.0.0-rc.109` — the exact compatible Effect release
+- `@popcomputer/web@0.6.0`, the first release on stable Effect 4
+- `effect@4.0.2`
 
-Using exact versions keeps the demo on the v4-compatible pair instead of allowing a floating dist-tag or prerelease range to select a different API surface.
+Exact pins keep the demo on a tested pair. When upgrading, move both together
+and run `bun run verify`; the OpenAPI check catches changes in how Effect
+generates JSON Schema.
 
 ## What the demo shows
 
@@ -111,9 +113,19 @@ Every request parses scalar Worker bindings once, before request-scoped framewor
 | `APP_ORIGIN` | Required canonical HTTP(S) origin with no credentials, path, query, or fragment. External production origins must use HTTPS; HTTP is accepted only for exact loopback origins used by local Workerd checks. Include a non-default port. |
 | `BETTER_AUTH_SECRET` | Required high-entropy secret of at least 32 characters. |
 | `BETTER_AUTH_TRUSTED_ORIGINS` | Optional strict comma-separated list of additional HTTP(S) origins; blank or trailing entries are rejected. Production entries must use HTTPS unless the canonical application origin is itself loopback. |
-| `DEV_VITE_PORT` | Optional integer from 1 to 65535; defaults to 5173 and is supplied automatically by `bun run dev`. |
+| `DEV_VITE_ORIGIN` | Optional exact HTTP(S) origin of the Vite dev server; defaults to `http://localhost:5173` and is supplied automatically by `bun run dev`. Only read in development. |
 
 The application origin is the Better Auth base URL and a trusted origin. Add preview or alternate origins through `BETTER_AUTH_TRUSTED_ORIGINS`; do not replace the canonical origin with a wildcard.
+
+### An interface that explains itself
+
+Pages use Tailwind utilities on the default palette and follow the system's
+light or dark mode. The account menu is a Base UI `Menu`, and destructive
+actions confirm in a Base UI `AlertDialog`, so the primitives own focus
+trapping, Escape handling, and focus return. The dashboard reads the account's
+projects and sessions concurrently in one Effect and renders a schema-derived
+overview. Every page ends with an "Under the hood" panel that names its route
+and the framework guarantees it demonstrates.
 
 ## Tech stack
 
@@ -122,7 +134,8 @@ The application origin is the Better Auth base URL and a trusted origin. Add pre
 - [Better Auth](https://www.better-auth.com)
 - Cloudflare D1 with [Drizzle ORM](https://orm.drizzle.team)
 - [React](https://react.dev) and [Inertia.js](https://inertiajs.com)
-- [Tailwind CSS](https://tailwindcss.com) and Vite
+- [Tailwind CSS](https://tailwindcss.com) utilities, [Base UI](https://base-ui.com) for the account menu and confirmation dialogs, and [Lucide](https://lucide.dev) icons
+- Vite, served locally through [portless](https://github.com/vercel-labs/portless)
 - Bun for dependency management, scripts, and tests
 
 ## Local development
@@ -161,18 +174,43 @@ The application origin is the Better Auth base URL and a trusted origin. Add pre
    bun run dev
    ```
 
-The development command first creates the production manifest and asset
-directory required by Wrangler, so it also works on a fresh checkout. Vite then
-serves live frontend changes during development.
+The app is served at a stable, named URL through
+[portless](https://github.com/vercel-labs/portless), installed as a dev
+dependency, so it never competes with other projects for a port:
 
-The first instance uses <http://localhost:8787> for the Worker and port 5173 for
-Vite. If either port is already busy, the development command increments both
-ports together until it finds a free pair (for example, 8788 and 5174). The
-selected URLs are printed at startup. The command passes `ENVIRONMENT=development`,
-the selected Worker URL as `APP_ORIGIN`, and the paired Vite port directly to
-Wrangler. Vite permits cross-origin source requests only from that exact
-loopback Worker origin, so shifted instances cannot accidentally use a stale
-or broadly exposed asset server.
+| Server | URL |
+| --- | --- |
+| Worker (open this) | `https://popcomputer-web-demo.localhost` |
+| Vite assets and HMR | `https://vite.popcomputer-web-demo.localhost` |
+
+`bun run dev` builds the production manifest Wrangler needs, then runs
+`scripts/dev.ts` through `portless run`. Portless assigns the Worker a free
+loopback port and its public URL. The script resolves the sibling Vite route
+with `portless get`, starts Vite under that route, and starts Wrangler with
+`--local-upstream` set to the public host. The Worker therefore sees the same
+origin as the browser, even when portless terminates HTTPS, so same-origin
+checks and Better Auth's trusted origins agree. Vite accepts cross-origin module
+requests only from that Worker origin.
+
+The first run starts the portless proxy on port 443. That needs your password
+once (to bind the port and trust portless's local certificate authority), so
+run it from an interactive terminal. Portless documents Node.js 24 or newer.
+Useful commands:
+
+```bash
+bunx portless list     # show active routes
+bunx portless doctor   # check proxy, DNS, and certificate trust
+```
+
+In a linked git worktree, portless prefixes both hostnames with the branch name
+(for example `fix-ui.popcomputer-web-demo.localhost`), so worktrees never
+collide either. To skip portless entirely, run `PORTLESS=0 bun run dev`. The
+Worker then uses <http://localhost:8787> and Vite uses port 5173, and startup
+fails if either port is already taken.
+
+For walking the UI locally, `scripts/fixtures/demo-account.ts` holds two
+throwaway accounts. Register them through the app; they exist only in your
+local D1 database.
 
 ## Database migrations
 
@@ -239,8 +277,9 @@ diagnostic is added, removed, or changes severity.
 │   └── 0007_bound_sessions.sql   # Session-row cap and stable owner index
 ├── openapi.json                  # Generated protected JSON API contract
 ├── scripts/
-│   ├── dev.ts                    # Paired Worker/Vite port orchestration
-│   ├── dev-environment.ts        # Exact local origins and Vite CORS policy
+│   ├── dev.ts                    # Portless Worker/Vite orchestration
+│   ├── dev-environment.ts        # Route names, local origins, and Vite CORS policy
+│   ├── fixtures/demo-account.ts  # Local-only accounts for walking the UI
 │   ├── check-framework.ts        # Exact framework-warning contract
 │   ├── check-openapi.ts          # Non-mutating OpenAPI drift check
 │   ├── migrations.test.ts        # Deploy-order and database invariant proofs
@@ -249,7 +288,7 @@ diagnostic is added, removed, or changes severity.
 ├── src/
 │   ├── actions/
 │   │   ├── auth.ts               # Login, registration, and logout
-│   │   ├── dashboard.ts          # Authenticated landing page
+│   │   ├── dashboard.ts          # Project and device overview
 │   │   ├── projects.ts           # Thin HTTP adapter for project use cases
 │   │   └── sessions.ts           # Thin HTTP adapter for session use cases
 │   ├── adapters/
@@ -260,7 +299,7 @@ diagnostic is added, removed, or changes severity.
 │   ├── application/
 │   │   ├── projects.ts           # Project workflows, ports, and failures
 │   │   └── session-lifecycle.ts  # Session policy, ports, and failures
-│   ├── components/               # Shared React shells and form controls
+│   ├── components/               # App shell, Base UI menu and dialog, form controls
 │   ├── db/
 │   │   ├── db.ts                 # Drizzle D1 client
 │   │   └── schema.ts             # Better Auth and project tables
@@ -272,6 +311,7 @@ diagnostic is added, removed, or changes severity.
 │   ├── http/
 │   │   ├── better-auth-form.ts   # Strict Better Auth form adapter
 │   │   ├── no-store-response.ts  # Global dynamic-response cache prohibition
+│   │   ├── project-http.ts       # Owner actor and safe project-to-HTTP failure mapping
 │   │   ├── require-authenticated-request.ts # Pre-parse auth middleware
 │   │   ├── bounded-request-body.ts # Authorization-first bounded parser
 │   │   ├── session-http.ts       # Safe session-to-HTTP failure mapping
@@ -285,16 +325,17 @@ diagnostic is added, removed, or changes severity.
 │   │   ├── Sessions/             # Active-session management page
 │   │   └── Dashboard.tsx
 │   ├── presentation/
+│   │   ├── dashboard.ts          # Browser-safe account overview
 │   │   ├── project.ts            # Browser-safe project projections
 │   │   ├── session.ts            # Browser-safe session projections
 │   │   └── timestamp.ts          # Shared strict wire timestamp schema
 │   ├── runtime/
 │   │   ├── request-cancellation.ts # Optional request-scoped cancellation
-│   │   └── runtime-config.ts      # Closed, redacted binding parser
+│   │   └── runtime-config.ts     # Closed, redacted binding parser
 │   ├── index.ts                  # Hono/setupWeb composition root
 │   ├── main.tsx                  # React/Inertia client entry
 │   ├── routes.ts                 # Route registry and policies
-│   ├── styles.css                # Tailwind and application styles
+│   ├── styles.css                # Tailwind import and global layering rules
 │   ├── types.ts                  # App bindings and module augmentation
 │   └── worker.ts                 # Fetch and scheduled-cleanup lifecycle
 ├── package.json

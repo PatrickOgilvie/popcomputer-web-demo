@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 const pages = import.meta.glob('./pages/**/*.tsx')
 
 createInertiaApp({
+  title: (title) =>
+    title ? `${title} · popcomputer/web demo` : 'popcomputer/web demo',
   defaults: {
     future: {
       useScriptElementForInitialPage: true,
