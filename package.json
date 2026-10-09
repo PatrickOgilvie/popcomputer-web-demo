@@ -30,11 +30,11 @@
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@inertiajs/react": "^2.3.21",
-    "@popcomputer/web": "0.5.0",
+    "@popcomputer/web": "0.6.0",
     "better-auth": "1.6.25",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",
-    "effect": "4.0.0-rc.109",
+    "effect": "4.0.2",
     "hono": "^4.13.13",
     "lucide-react": "^1.54.0",
     "react": "^19.3.0",

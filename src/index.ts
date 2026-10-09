@@ -1,4 +1,4 @@
-import { createTemplate, createVersion, setupWeb } from '@popcomputer/web'
+import { createTemplate, createVersion, setupWeb, vite } from '@popcomputer/web'
 import {
   EffectErrorObserverService,
   type EffectErrorEvent,
@@ -15,7 +15,6 @@ import { runtimeConfigMiddleware } from '~/runtime/runtime-config'
 import { makeRequestCancellationLayer } from '~/runtime/request-cancellation'
 import { makeRawRequestLayer } from '~/http/bounded-request-body'
 import { noStoreResponse } from '~/http/no-store-response'
-import { viteDevAssets } from '~/runtime/vite-dev-assets'
 
 const app = new Hono<AppEnv>()
 
@@ -78,12 +77,11 @@ setupWeb(app, {
     const config = ctx.var.runtimeConfig
     const isDev = config.mode === 'development'
     if (isDev) {
-      const assets = viteDevAssets(config.viteOrigin)
       return {
         title: 'popcomputer/web demo',
-        scripts: [...assets.scripts],
+        scripts: [vite.script('/src/main.tsx', config.viteOrigin)],
         styles: [],
-        head: `${documentHead}${assets.head}`,
+        head: `${documentHead}${vite.hmrHead(config.viteOrigin)}`,
       }
     }
 

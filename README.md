@@ -8,13 +8,12 @@ A Cloudflare Workers demo for [@popcomputer/web](https://github.com/PatrickOgilv
 
 The demo pins its framework and Effect versions exactly:
 
-- `@popcomputer/web@0.5.0` — the current stable release on npm's `latest` channel
-- `effect@4.0.0-rc.109` — the Effect build the framework is tested against
+- `@popcomputer/web@0.6.0`, the first release on stable Effect 4
+- `effect@4.0.2`
 
-Do not let the Effect version float. The framework's peer range
-(`^4.0.0-rc.109`) also admits Effect `4.0.x`, but `@popcomputer/web@0.5.0`
-calls APIs that Effect renamed in `4.0.0-rc.113` (for example
-`SchemaTransformation.transformOrFail`), so a newer Effect fails at runtime.
+Exact pins keep the demo on a tested pair. When upgrading, move both together
+and run `bun run verify`; the OpenAPI check catches changes in how Effect
+generates JSON Schema.
 
 ## What the demo shows
 
@@ -332,8 +331,7 @@ diagnostic is added, removed, or changes severity.
 │   │   └── timestamp.ts          # Shared strict wire timestamp schema
 │   ├── runtime/
 │   │   ├── request-cancellation.ts # Optional request-scoped cancellation
-│   │   ├── runtime-config.ts     # Closed, redacted binding parser
-│   │   └── vite-dev-assets.ts    # Dev script and HMR tags for a Vite origin
+│   │   └── runtime-config.ts     # Closed, redacted binding parser
 │   ├── index.ts                  # Hono/setupWeb composition root
 │   ├── main.tsx                  # React/Inertia client entry
 │   ├── routes.ts                 # Route registry and policies
