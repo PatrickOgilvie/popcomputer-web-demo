@@ -21,4 +21,18 @@ describe('no-store response policy', () => {
     expect(visible.headers.get('cache-control')).toBe('no-store')
     expect(missing.headers.get('cache-control')).toBe('no-store')
   })
+
+  test('keeps a cache policy the framework already set', async () => {
+    const app = new Hono()
+    app.use('*', noStoreResponse)
+    app.get('/login', (context) => {
+      context.header('Cache-Control', 'public, max-age=0, must-revalidate')
+
+      return context.html('<html></html>')
+    })
+
+    const response = await app.request('/login')
+
+    expect(response.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate')
+  })
 })
