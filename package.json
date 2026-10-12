@@ -30,7 +30,7 @@
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@inertiajs/react": "^2.3.21",
-    "@popcomputer/web": "0.6.0",
+    "@popcomputer/web": "0.7.0",
     "better-auth": "1.6.25",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",
