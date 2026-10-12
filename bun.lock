@@ -7,7 +7,7 @@
       "dependencies": {
         "@base-ui/react": "^1.9.0",
         "@inertiajs/react": "^2.3.21",
-        "@popcomputer/web": "0.6.0",
+        "@popcomputer/web": "0.7.0",
         "better-auth": "1.6.25",
         "clsx": "^2.1.1",
         "drizzle-orm": "^0.45.4",
@@ -258,7 +258,7 @@
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.40.0", "", {}, "sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw=="],
 
-    "@popcomputer/web": ["@popcomputer/web@0.6.0", "", { "dependencies": { "tsx": "^4.23.11" }, "peerDependencies": { "better-auth": ">=1.0.0 <2.0.0", "drizzle-orm": ">=0.30.0", "effect": "^4.0.0", "hono": ">=4.0.0" }, "optionalPeers": ["better-auth", "drizzle-orm"], "bin": { "popweb": "dist/cli/bin.js" } }, "sha512-kQckY2+Yc9+YjbTWUqFGrj1R+o726nRTIhTqI4FLI3Ifo7NH493+INomgg/15DbwK+pRQaaDCQuybSkNvFUASw=="],
+    "@popcomputer/web": ["@popcomputer/web@0.7.0", "", { "dependencies": { "tsx": "^4.23.11" }, "peerDependencies": { "better-auth": ">=1.0.0 <2.0.0", "drizzle-orm": ">=0.30.0", "effect": "^4.0.0", "hono": ">=4.0.0" }, "optionalPeers": ["better-auth", "drizzle-orm"], "bin": { "popweb": "dist/cli/bin.js" } }, "sha512-cbQWo1ZGdsjUQGUIHRGEJBPlFmMXnxrbHBJwv5Wl2yWMkgLuxnxBjTAkGlT3KKA31kol25Q7gU692mUaGjyAaw=="],
 
     "@poppinss/colors": ["@poppinss/colors@4.1.6", "", { "dependencies": { "kleur": "^4.1.5" } }, "sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg=="],
 

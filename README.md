@@ -8,7 +8,8 @@ A Cloudflare Workers demo for [@popcomputer/web](https://github.com/PatrickOgilv
 
 The demo pins its framework and Effect versions exactly:
 
-- `@popcomputer/web@0.6.0`, the first release on stable Effect 4
+- `@popcomputer/web@0.7.0`, which caches static pages such as sign-in and
+  registration at Cloudflare's edge by default
 - `effect@4.0.2`
 
 Exact pins keep the demo on a tested pair. When upgrading, move both together
