@@ -64,14 +64,21 @@ test/           tests through the app, each on a D1 database of its own
 
 ## Running it locally
 
-You need [Bun](https://bun.sh).
+You need [Bun](https://bun.sh). Create an app of your own from the template,
+which downloads it and installs its dependencies:
+
+```bash
+bun create PatrickOgilvie/popcomputer-web-demo my-app
+```
+
+Or, in a copy you cloned or made with GitHub's "Use this template":
 
 ```bash
 bun install
 ```
 
-Copy the local secrets file, and replace its placeholder with the output of
-`openssl rand -base64 32`:
+Then, in the app's folder, copy the local secrets file, and replace its
+placeholder with the output of `openssl rand -base64 32`:
 
 ```bash
 cp .dev.vars.example .dev.vars
