@@ -8,21 +8,18 @@ import {
   fieldLabelClassName,
 } from '~/components/fieldStyles'
 import TextField from '~/components/TextField'
-import type { ProjectSummary } from '~/presentation/project'
+import type { FormErrors, FormInput } from '@popcomputer/web/react'
+import type { ProjectForm } from '~/forms'
 
 const NAME_LIMIT = 100
 const DESCRIPTION_LIMIT = 500
 
-/** Editable values shared by the create and update project forms. */
-export interface ProjectFormValues {
-  readonly name: string
-  readonly description: string
-  readonly visibility: ProjectSummary['visibility']
-}
+/** The fields the create and edit forms send, as their actions validate them. */
+export type ProjectFormValues = FormInput<typeof ProjectForm>
 
 interface ProjectFormFieldsProps {
   readonly data: ProjectFormValues
-  readonly errors: Partial<Record<keyof ProjectFormValues, string>>
+  readonly errors: FormErrors<typeof ProjectForm>
   readonly disabled: boolean
   readonly onChange: <Field extends keyof ProjectFormValues>(
     field: Field,
@@ -93,7 +90,7 @@ export default function ProjectFormFields({
             Description{' '}
             <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span>
           </label>
-          <Counter length={data.description.length} limit={DESCRIPTION_LIMIT} />
+          <Counter length={data.description?.length ?? 0} limit={DESCRIPTION_LIMIT} />
         </div>
         <textarea
           id="project-description"
@@ -101,7 +98,7 @@ export default function ProjectFormFields({
           rows={4}
           maxLength={DESCRIPTION_LIMIT}
           disabled={disabled}
-          value={data.description}
+          value={data.description ?? ''}
           className={cn(fieldControlClassName, 'min-h-28 resize-y py-2 text-pretty')}
           aria-invalid={errors.description ? true : undefined}
           aria-describedby={
@@ -109,7 +106,7 @@ export default function ProjectFormFields({
               ? `${descriptionHintId} ${descriptionErrorId}`
               : descriptionHintId
           }
-          onChange={(event) => onChange('description', event.target.value)}
+          onChange={(event) => onChange('description', event.target.value === '' ? null : event.target.value)}
         />
         <p id={descriptionHintId} className={fieldHintClassName}>
           Shown on the project page and, when public, on its showcase page.{' '}

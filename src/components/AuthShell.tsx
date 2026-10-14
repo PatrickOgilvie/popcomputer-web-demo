@@ -13,7 +13,7 @@ interface AuthShellProps {
   readonly alternateHref: string
   readonly alternateLabel: string
   readonly route: string
-  readonly routeName: string
+  readonly action: string
   readonly children: ReactNode
 }
 
@@ -45,7 +45,7 @@ export default function AuthShell({
   alternateHref,
   alternateLabel,
   route,
-  routeName,
+  action,
   children,
 }: AuthShellProps) {
   const { mainRef, announcement } = usePageTransitionFocus()
@@ -114,13 +114,15 @@ export default function AuthShell({
             </li>
           ))}
         </ul>
-        <UnderTheHood route={route} name={routeName} compact>
+        <UnderTheHood route={route} action={action} compact>
           <Guarantee>
-            Better Auth runs as an internal provider; browsers can’t reach{' '}
+            The form is validated by its schema in <code className="font-mono text-xs">src/forms.ts</code>, then
+            sent through Better Auth’s own handler; browsers can’t reach{' '}
             <code className="font-mono text-xs">/api/auth/*</code>.
           </Guarantee>
-          <Guarantee>Credential bodies are size-capped before they’re parsed.</Guarantee>
-          <Guarantee>In production, attempts are rate limited per client in D1.</Guarantee>
+          <Guarantee>
+            Attempts are limited per address by Cloudflare’s Rate Limiting binding, and per account in D1.
+          </Guarantee>
         </UnderTheHood>
       </aside>
     </div>

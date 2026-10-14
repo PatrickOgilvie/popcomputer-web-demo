@@ -1,13 +1,16 @@
 import { Head, useForm } from '@inertiajs/react'
+import type { FormInput } from '@popcomputer/web/react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
 import AuthShell from '~/components/AuthShell'
 import { buttonClassName } from '~/components/button'
 import TextField from '~/components/TextField'
+import type { SignIn } from '~/forms'
+import { paths } from '~/paths'
 
 export default function Login() {
-  const { data, setData, post, processing, errors, clearErrors } = useForm({
+  const { data, setData, post, processing, errors, clearErrors } = useForm<FormInput<typeof SignIn>>({
     email: '',
     password: '',
   })
@@ -22,7 +25,7 @@ export default function Login() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    post('/login')
+    post(paths.login)
   }
 
   return (
@@ -32,10 +35,10 @@ export default function Login() {
         title="Sign in"
         description="Pick up where you left off with your projects and devices."
         alternatePrompt="New here?"
-        alternateHref="/register"
+        alternateHref={paths.register}
         alternateLabel="Create an account"
         route="POST /login"
-        routeName="login.store"
+        action="signIn"
       >
         <form ref={formRef} className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <TextField

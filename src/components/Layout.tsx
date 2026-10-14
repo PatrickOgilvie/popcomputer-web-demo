@@ -5,16 +5,16 @@ import AccountMenu from '~/components/AccountMenu'
 import Brand from '~/components/Brand'
 import { buttonClassName } from '~/components/button'
 import usePageTransitionFocus from '~/components/usePageTransitionFocus'
-import type { PageProps } from '~/types'
+import { paths } from '~/paths'
 
 interface LayoutProps {
   readonly children: ReactNode
 }
 
 const primaryNavigation = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Projects', href: '/projects' },
-  { label: 'Sessions', href: '/sessions' },
+  { label: 'Dashboard', href: paths.dashboard },
+  { label: 'Projects', href: paths.projects },
+  { label: 'Sessions', href: paths.sessions },
 ] as const
 
 function isActivePath(currentPath: string, href: string): boolean {
@@ -53,8 +53,8 @@ function PrimaryNavigation({
 
 /** Application frame: account-aware header, page focus management, content. */
 export default function Layout({ children }: LayoutProps) {
-  const page = usePage<PageProps>()
-  const user = page.props.auth?.user
+  const page = usePage()
+  const user = page.props.auth.user
   const currentPath = page.url.split(/[?#]/)[0] || '/'
   const trimmedName = user?.name?.trim()
   const displayName =
@@ -81,11 +81,11 @@ export default function Layout({ children }: LayoutProps) {
               <AccountMenu displayName={displayName} email={user.email} />
             ) : (
               <>
-                <Link href="/login" className={buttonClassName({ variant: 'ghost', size: 'sm' })}>
+                <Link href={paths.login} className={buttonClassName({ variant: 'ghost', size: 'sm' })}>
                   Sign in
                 </Link>
                 <Link
-                  href="/register"
+                  href={paths.register}
                   className={buttonClassName({ size: 'sm', className: 'hidden sm:inline-flex' })}
                 >
                   Create account
@@ -113,6 +113,14 @@ export default function Layout({ children }: LayoutProps) {
         className="flex-1 focus:outline-none"
       >
         <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+          {page.flash.success ? (
+            <p
+              role="status"
+              className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+            >
+              {page.flash.success}
+            </p>
+          ) : null}
           {children}
         </div>
       </main>

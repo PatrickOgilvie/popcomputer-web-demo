@@ -1,86 +1,63 @@
-import { Effect, Result } from 'effect'
-
+import { and, desc, eq, gt } from 'drizzle-orm'
+import { DateTime, Effect } from 'effect'
 import {
   action,
+  authorize,
+  bound,
+  dbQuery,
+  flash,
+  invalid,
+  notFound,
   redirect,
   render,
 } from '@popcomputer/web/effect'
-import { SessionLifecycle } from '~/application/session-lifecycle'
-import { RevokeSessionInput } from '~/domain/session'
-import {
-  currentSessionActor,
-  toSessionHttpFailure,
-} from '~/http/session-http'
-import {
-  defineStrictForm,
-  respondWithStrictFormErrors,
-} from '~/http/strict-form-route'
-import { toSessionSummary } from '~/presentation/session'
+import { betterAuthCall } from '@popcomputer/web/auth'
+import { columnsOf } from '@popcomputer/web/schema'
+import { Session } from '../pages'
+import { paths } from '../paths'
+import { session } from '../schema'
 
-const sessionIndexContext = Effect.fn('Sessions.httpIndexContext')(
-  function* () {
-    const actor = yield* currentSessionActor
-    const lifecycle = yield* SessionLifecycle
-    const sessions = yield* lifecycle
-      .list(actor)
-      .pipe(Effect.mapError(toSessionHttpFailure))
+/** The devices signed in to the member's account, the current one marked. */
+export const listSessions = action(
+  Effect.gen(function* () {
+    const auth = yield* authorize()
+    const now = DateTime.toDateUtc(yield* DateTime.now)
+    const rows = yield* dbQuery((db) =>
+      db.select(columnsOf(session, Session))
+        .from(session)
+        .where(and(eq(session.userId, auth.user.id), gt(session.expiresAt, now)))
+        .orderBy(desc(session.updatedAt))
+    )
 
-    return {
-      actor,
-      sessions: sessions.map(toSessionSummary),
-    }
-  }
-)()
-
-/** Lists the signed-in user's active sessions without exposing tokens. */
-export const showSessions = action(
-  Effect.fn('Sessions.index')(function* () {
-    const context = yield* sessionIndexContext
-    return yield* render('Sessions/Index', { sessions: context.sessions })
-  })()
+    return yield* render('Sessions/Index', {
+      sessions: rows.map((row) => ({ ...row, current: row.id === auth.session.id })),
+    })
+  })
 )
 
-/** Strict revoke form whose safe session list is prepared before body parsing. */
-export const revokeSession = defineStrictForm({
-  name: 'Sessions.revoke',
-  schema: RevokeSessionInput,
-  prepare: sessionIndexContext,
-  onInvalid: (errors, context) =>
-    respondWithStrictFormErrors('Sessions/Index', errors, {
-      sessions: context.sessions,
-    }),
-  onValid: (input, context) =>
-    Effect.gen(function* () {
-      const lifecycle = yield* SessionLifecycle
-      const outcome = yield* Effect.result(
-        lifecycle.revokeOne(context.actor, input.sessionId)
-      )
+/** Signs another of the member's devices out, through Better Auth. */
+export const revokeSession = action(
+  Effect.gen(function* () {
+    const auth = yield* authorize()
+    const device = yield* bound('session')
 
-      if (Result.isFailure(outcome)) {
-        if (outcome.failure._tag === 'CannotRevokeCurrentSession') {
-          return yield* respondWithStrictFormErrors(
-            'Sessions/Index',
-            { sessionId: 'Use sign out to end this session.' },
-            { sessions: context.sessions }
-          )
-        }
+    if (device.userId !== auth.user.id) return yield* notFound('Session')
+    if (device.id === auth.session.id) return yield* invalid({ session: 'Sign out to end the session you are using.' })
 
-        return yield* toSessionHttpFailure(outcome.failure)
-      }
+    yield* betterAuthCall('revokeSession', { body: { token: device.token } })
+    yield* flash('success', 'Signed that device out.')
 
-      return yield* redirect('/sessions')
-    }),
-})
+    return yield* redirect(paths.sessions)
+  })
+)
 
-/** Revokes every active session except the request's current session. */
+/** Signs every device but this one out, through Better Auth. */
 export const revokeOtherSessions = action(
-  Effect.fn('Sessions.revokeOthers')(function* () {
-    const actor = yield* currentSessionActor
-    const lifecycle = yield* SessionLifecycle
-    yield* lifecycle
-      .revokeOthers(actor)
-      .pipe(Effect.mapError(toSessionHttpFailure))
+  Effect.gen(function* () {
+    yield* authorize()
+    yield* betterAuthCall('revokeOtherSessions', {})
+    yield* flash('success', 'Signed every other device out.')
 
-    return yield* redirect('/sessions')
-  })()
+    return yield* redirect(paths.sessions)
+  })
 )

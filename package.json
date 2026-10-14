@@ -1,25 +1,16 @@
 {
   "name": "popcomputer-web-demo",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "private": true,
-  "description": "Demo app showcasing @popcomputer/web with D1 database and Better Auth authentication on Cloudflare Workers",
+  "description": "A starting point for @popcomputer/web on Cloudflare Workers: React pages, D1 and Better Auth.",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "bun run build && portless run --name popcomputer-web-demo bun scripts/dev.ts",
-    "dev:vite": "vite",
-    "dev:worker": "wrangler dev",
-    "build": "vite build && bun scripts/verify-build-manifest.ts",
-    "verify:assets": "bun scripts/verify-build-manifest.ts",
-    "routes": "bun node_modules/@popcomputer/web/dist/cli/bin.js routes --app src/index.ts",
-    "check": "bun scripts/check-framework.ts",
-    "openapi": "bun node_modules/@popcomputer/web/dist/cli/bin.js generate:openapi --app src/index.ts --include /api --title 'Popcomputer Web Demo API' --version 1.0.0-rc.1 --description 'Protected JSON showcase for @popcomputer/web' --output openapi.json",
-    "openapi:check": "bun scripts/check-openapi.ts",
-    "test": "bun test",
-    "test:worker": "bash scripts/smoke-worker.sh",
-    "typecheck": "tsc --noEmit",
-    "deploy:dry": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
-    "verify": "bun run build && bun run typecheck && bun test && bun run check && bun run openapi:check && bun run test:worker && bun run verify:assets && bun run deploy:dry",
+    "postinstall": "bun run build",
+    "build": "vite build",
+    "dev": "concurrently --kill-others --names vite,worker \"vite\" \"wrangler dev --var ENVIRONMENT:development\"",
+    "check": "tsc --noEmit && oxlint && bun test",
+    "db:generate": "drizzle-kit generate",
     "db:create": "wrangler d1 create popcomputer-web-demo-db --binding DB --update-config",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
@@ -29,47 +20,32 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@inertiajs/react": "^2.3.21",
-    "@popcomputer/web": "0.7.0",
-    "better-auth": "1.6.25",
+    "@inertiajs/react": "3.9.1",
+    "@popcomputer/web": "^1.0.0",
+    "better-auth": "1.7.7",
     "clsx": "^2.1.1",
-    "drizzle-orm": "^0.45.4",
-    "effect": "4.0.2",
-    "hono": "^4.13.13",
+    "drizzle-orm": "0.45.4",
+    "effect": "4.0.3",
+    "hono": "4.13.13",
     "lucide-react": "^1.54.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261009.1",
+    "@cloudflare/workers-types": "^5.20261013.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.3.14",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^9.2.1",
-    "drizzle-kit": "^0.31.10",
-    "portless": "0.15.7",
+    "drizzle-kit": "^0.31.11",
+    "miniflare": "4.20260730.0",
+    "oxlint": "1.82.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vite": "^6.4.2",
-    "wrangler": "4.149.0"
-  },
-  "cloudflare": {
-    "bindings": {
-      "DB": {
-        "description": "D1 database for Better Auth users, sessions, rate limits, and application projects."
-      },
-      "BETTER_AUTH_SECRET": {
-        "description": "Authentication secret with at least 32 characters of high entropy. Generate one with `openssl rand -base64 32`."
-      },
-      "APP_ORIGIN": {
-        "description": "Canonical public HTTP(S) origin of this Worker, including a non-default port when present and no trailing path (for example `https://demo.example.com`)."
-      },
-      "ENVIRONMENT": {
-        "description": "Closed deployment mode. Use exactly `production` for deployed Workers or `development` locally."
-      }
-    }
+    "wrangler": "^4.149.0"
   }
 }

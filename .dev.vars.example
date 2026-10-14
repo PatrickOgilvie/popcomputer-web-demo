@@ -1,2 +1,4 @@
-# Authentication secret - generate a high-entropy value with at least 32 characters
-BETTER_AUTH_SECRET=local-development-secret-change-me-123456789
+# Copy to .dev.vars for `bun run dev`. The Deploy to Cloudflare button asks
+# for each value here as a secret: give it a new one, from
+# `openssl rand -base64 32`, never this placeholder.
+BETTER_AUTH_SECRET=replace-me-with-the-output-of-openssl-rand-base64-32

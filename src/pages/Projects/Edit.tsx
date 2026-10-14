@@ -1,58 +1,33 @@
 import { Head, Link, useForm } from '@inertiajs/react'
-import { TriangleAlert } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
+import { href } from '@popcomputer/web/paths'
+import type { WebPage } from '@popcomputer/web/react'
 
 import { buttonClassName } from '~/components/button'
 import Layout from '~/components/Layout'
 import PageHeader from '~/components/PageHeader'
-import ProjectFormFields from '~/components/ProjectFormFields'
-import type { ProjectFormValues } from '~/components/ProjectFormFields'
+import ProjectFormFields, { type ProjectFormValues } from '~/components/ProjectFormFields'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { ProjectDetail } from '~/presentation/project'
+import { paths } from '~/paths'
 
-interface EditProjectProps {
-  readonly project: ProjectDetail
-}
-
-interface UpdateProjectFormValues extends ProjectFormValues {
-  readonly expectedRevision: number
-}
-
-/** Updates an owner-scoped project through a strict Effect action. */
-export default function EditProject({ project }: EditProjectProps) {
+/** Updates the member's project through the `updateProject` action. */
+const EditProject: WebPage<'Projects/Edit'> = ({ project }) => {
   const formRef = useRef<HTMLFormElement>(null)
-  const projectPath = `/projects/${encodeURIComponent(project.id)}`
-  const { data, setData, put, processing, errors, clearErrors } =
-    useForm<UpdateProjectFormValues>({
-      name: project.name,
-      description: project.description,
-      visibility: project.visibility,
-      expectedRevision: project.revision,
-    })
+  const projectPath = href(paths.project, { project: project.id })
+  const { data, setData, put, processing, errors, clearErrors } = useForm<ProjectFormValues>({
+    name: project.name,
+    description: project.description,
+    visibility: project.visibility,
+  })
 
   useEffect(() => {
     if (Object.keys(errors).length === 0) return
-    const target =
-      formRef.current?.querySelector<HTMLElement>(
-        'input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"]'
-      ) ?? formRef.current?.querySelector<HTMLElement>('[role="alert"]')
-    target?.focus()
+    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }, [errors])
 
-  function updateField(field: keyof ProjectFormValues, value: string) {
-    switch (field) {
-      case 'name':
-        setData('name', value)
-        break
-      case 'description':
-        setData('description', value)
-        break
-      case 'visibility':
-        if (value !== 'private' && value !== 'public') return
-        setData('visibility', value)
-        break
-    }
+  function updateField<Field extends keyof ProjectFormValues>(field: Field, value: ProjectFormValues[Field]) {
+    setData((data) => ({ ...data, [field]: value }))
     clearErrors(field)
   }
 
@@ -69,11 +44,10 @@ export default function EditProject({ project }: EditProjectProps) {
           <PageHeader
             title="Edit project"
             breadcrumbs={[
-              { label: 'Projects', href: '/projects' },
+              { label: 'Projects', href: paths.projects },
               { label: project.name, href: projectPath },
               { label: 'Edit' },
             ]}
-            meta={<span className="tabular-nums">Editing revision {project.revision}</span>}
           />
 
           <form
@@ -82,63 +56,30 @@ export default function EditProject({ project }: EditProjectProps) {
             onSubmit={handleSubmit}
             className="rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900"
           >
-            {errors.expectedRevision ? (
-              <div
-                role="alert"
-                tabIndex={-1}
-                className="flex flex-col gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4 focus:outline-none sm:flex-row sm:items-center sm:px-6 dark:border-amber-900/60 dark:bg-amber-950/30"
-              >
-                <TriangleAlert
-                  className="size-5 shrink-0 text-amber-700 dark:text-amber-400"
-                  aria-hidden="true"
-                />
-                <p className="flex-1 text-sm text-pretty text-amber-900 dark:text-amber-200">
-                  {errors.expectedRevision}
-                </p>
-                <Link
-                  href={`${projectPath}/edit`}
-                  className={buttonClassName({ variant: 'secondary', size: 'sm' })}
-                >
-                  Load latest version
-                </Link>
-              </div>
-            ) : null}
             <div className="p-5 sm:p-6">
-              <ProjectFormFields
-                data={data}
-                errors={errors}
-                disabled={processing}
-                onChange={updateField}
-              />
+              <ProjectFormFields data={data} errors={errors} disabled={processing} onChange={updateField} />
             </div>
-            <input type="hidden" name="expectedRevision" value={data.expectedRevision} />
             <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-zinc-800">
               <Link href={projectPath} className={buttonClassName({ variant: 'ghost' })}>
                 Cancel
               </Link>
-              <button
-                type="submit"
-                disabled={processing}
-                aria-busy={processing}
-                className={buttonClassName()}
-              >
+              <button type="submit" disabled={processing} aria-busy={processing} className={buttonClassName()}>
                 <span aria-live="polite">{processing ? 'Saving…' : 'Save changes'}</span>
               </button>
             </div>
           </form>
 
-          <UnderTheHood route="PUT /projects/:project" name="projects.update" compact>
+          <UnderTheHood route="PUT /projects/{project}" action="updateProject" compact>
             <Guarantee>
-              The project is found within your account before the request body is
-              read.
+              <code>bound('project')</code> loads the project the path names, and another member's project is
+              a 404, so its existence stays private.
             </Guarantee>
-            <Guarantee>
-              Saving sends revision {project.revision}; if someone saved a newer
-              version first, this save fails instead of overwriting it.
-            </Guarantee>
+            <Guarantee>The update is scoped by the bound project and its owner.</Guarantee>
           </UnderTheHood>
         </div>
       </Layout>
     </>
   )
 }
+
+export default EditProject

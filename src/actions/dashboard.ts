@@ -1,44 +1,37 @@
-import { Effect } from 'effect'
-import { action, render } from '@popcomputer/web/effect'
+import { and, desc, eq, gt } from 'drizzle-orm'
+import { DateTime, Effect } from 'effect'
+import { action, authorize, dbQuery, render } from '@popcomputer/web/effect'
+import { columnsOf } from '@popcomputer/web/schema'
+import { ProjectSummary } from '../pages'
+import { projects, session } from '../schema'
 
-import { Projects } from '~/application/projects'
-import { SessionLifecycle } from '~/application/session-lifecycle'
-import {
-  currentProjectActor,
-  toProjectHttpFailure,
-} from '~/http/project-http'
-import {
-  currentSessionActor,
-  toSessionHttpFailure,
-} from '~/http/session-http'
-import { toDashboardProps } from '~/presentation/dashboard'
-
-/** Summarizes the signed-in user's projects and devices in one request. */
 export const showDashboard = action(
-  Effect.fn('Dashboard.show')(function* () {
-    const projectActor = yield* currentProjectActor
-    const sessionActor = yield* currentSessionActor
-    const projects = yield* Projects
-    const lifecycle = yield* SessionLifecycle
+  Effect.gen(function* () {
+    const auth = yield* authorize()
+    const now = DateTime.toDateUtc(yield* DateTime.now)
+    const ownProjects = eq(projects.userId, auth.user.id)
 
-    const [owned, sessions] = yield* Effect.all(
-      [
-        projects
-          .listOwned(projectActor)
-          .pipe(Effect.mapError(toProjectHttpFailure)),
-        lifecycle
-          .list(sessionActor)
-          .pipe(Effect.mapError(toSessionHttpFailure)),
-      ],
-      { concurrency: 2 }
-    )
+    const { recentProjects, projectCount, publicProjectCount, sessionCount } = yield* Effect.all({
+      recentProjects: dbQuery((db) =>
+        db.select(columnsOf(projects, ProjectSummary))
+          .from(projects)
+          .where(ownProjects)
+          .orderBy(desc(projects.updatedAt))
+          .limit(5)
+      ),
+      projectCount: dbQuery((db) => db.$count(projects, ownProjects)),
+      publicProjectCount: dbQuery((db) => db.$count(projects, and(ownProjects, eq(projects.visibility, 'public')))),
+      sessionCount: dbQuery((db) =>
+        db.$count(session, and(eq(session.userId, auth.user.id), gt(session.expiresAt, now)))
+      ),
+    }, { concurrency: 'unbounded' })
 
-    return yield* render(
-      'Dashboard',
-      toDashboardProps(
-        owned.map(({ project }) => project),
-        sessions
-      )
-    )
-  })()
+    return yield* render('Dashboard', {
+      recentProjects,
+      projectCount,
+      publicProjectCount,
+      sessionCount,
+      thisDevice: { userAgent: auth.session.userAgent, createdAt: auth.session.createdAt },
+    })
+  })
 )

@@ -1,10 +1,10 @@
 import { Globe, Lock } from 'lucide-react'
 
 import { cn } from '~/components/cn'
-import type { ProjectVisibility } from '~/domain/project'
+import type { Visibility } from '~/forms'
 
 interface ProjectVisibilityBadgeProps {
-  readonly visibility: ProjectVisibility
+  readonly visibility: typeof Visibility.Type
   readonly className?: string
 }
 

@@ -1,6 +1,7 @@
 import { Menu } from '@base-ui/react/menu'
 import { Link, router } from '@inertiajs/react'
 import { ChevronDown, LogOut, MonitorSmartphone } from 'lucide-react'
+import { paths } from '~/paths'
 
 interface AccountMenuProps {
   readonly displayName: string
@@ -40,12 +41,12 @@ export default function AccountMenu({ displayName, email }: AccountMenuProps) {
             <Menu.LinkItem
               className={itemClassName}
               closeOnClick
-              render={<Link href="/sessions" />}
+              render={<Link href={paths.sessions} />}
             >
               <MonitorSmartphone aria-hidden="true" />
               Signed-in devices
             </Menu.LinkItem>
-            <Menu.Item className={itemClassName} onClick={() => router.post('/logout')}>
+            <Menu.Item className={itemClassName} onClick={() => router.post(paths.logout)}>
               <LogOut aria-hidden="true" />
               Sign out
             </Menu.Item>

@@ -1,25 +1,39 @@
 import './styles.css'
 import { createInertiaApp } from '@inertiajs/react'
+import type { PageName } from '@popcomputer/web/effect'
+import type { WebPage } from '@popcomputer/web/react'
 import { createRoot } from 'react-dom/client'
+import Login from './pages/Auth/Login'
+import Register from './pages/Auth/Register'
+import Dashboard from './pages/Dashboard'
+import ErrorPage from './pages/Errors/Error'
+import CreateProject from './pages/Projects/Create'
+import EditProject from './pages/Projects/Edit'
+import ProjectsIndex from './pages/Projects/Index'
+import PublicProject from './pages/Projects/Public'
+import ShowProject from './pages/Projects/Show'
+import SessionsIndex from './pages/Sessions/Index'
 
-const pages = import.meta.glob('./pages/**/*.tsx')
+// Every registered page's component: a page without one is a type error.
+const components: { readonly [Name in PageName]: WebPage<Name> } = {
+  'Auth/Login': Login,
+  'Auth/Register': Register,
+  Dashboard,
+  'Projects/Index': ProjectsIndex,
+  'Projects/Create': CreateProject,
+  'Projects/Show': ShowProject,
+  'Projects/Edit': EditProject,
+  'Projects/Public': PublicProject,
+  'Sessions/Index': SessionsIndex,
+}
 
-createInertiaApp({
-  title: (title) =>
-    title ? `${title} · popcomputer/web demo` : 'popcomputer/web demo',
-  defaults: {
-    future: {
-      useScriptElementForInitialPage: true,
-    },
-  },
-  resolve: (name) => {
-    const page = pages[`./pages/${name}.tsx`]
-    if (!page) {
-      throw new Error(`Page not found: ${name}`)
-    }
-    return page()
-  },
+const isPage = (name: string): name is PageName => name in components
+
+void createInertiaApp({
+  title: (title) => (title ? `${title} · popcomputer/web demo` : 'popcomputer/web demo'),
+  // The error page is not a registered page: it answers any other name.
+  resolve: (name) => (isPage(name) ? components[name] : ErrorPage),
   setup({ el, App, props }) {
-    createRoot(el).render(<App {...props} />)
+    if (el !== null) createRoot(el).render(<App {...props} />)
   },
 })

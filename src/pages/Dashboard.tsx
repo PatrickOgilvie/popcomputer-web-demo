@@ -1,4 +1,6 @@
 import { Head, Link, usePage } from '@inertiajs/react'
+import { href } from '@popcomputer/web/paths'
+import type { WebPage } from '@popcomputer/web/react'
 import { ArrowRight, FolderPlus, Plus } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -10,8 +12,7 @@ import PageHeader from '~/components/PageHeader'
 import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
 import { describeSessionDevice } from '~/components/session-device'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { DashboardProps } from '~/presentation/dashboard'
-import type { PageProps } from '~/types'
+import { paths } from '~/paths'
 
 const cardClassName =
   'rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900'
@@ -45,18 +46,20 @@ function StatCard({
   )
 }
 
-/** Summarizes the signed-in account: recent projects, visibility, and devices. */
-export default function Dashboard({ projects, sessions }: DashboardProps) {
-  const { auth } = usePage<PageProps>().props
-  const trimmedName = auth?.user?.name?.trim()
-  const firstName =
-    (trimmedName && trimmedName.split(/\s+/)[0]) || auth?.user?.email || 'there'
-  const hasProjects = projects.total > 0
-  const currentDevice = sessions.current
-    ? describeSessionDevice(sessions.current.userAgent)
-    : undefined
-  const otherSessions = Math.max(sessions.active - (sessions.current ? 1 : 0), 0)
-  const publicShare = hasProjects ? (projects.public / projects.total) * 100 : 0
+/** The member's account at a glance: recent projects, visibility, and devices. */
+const Dashboard: WebPage<'Dashboard'> = ({
+  recentProjects,
+  projectCount,
+  publicProjectCount,
+  sessionCount,
+  thisDevice,
+}) => {
+  const { auth } = usePage().props
+  const firstName = auth.user?.name.trim().split(/\s+/)[0] || auth.user?.email || 'there'
+  const hasProjects = projectCount > 0
+  const device = describeSessionDevice(thisDevice.userAgent)
+  const otherSessions = Math.max(sessionCount - 1, 0)
+  const publicShare = hasProjects ? (publicProjectCount / projectCount) * 100 : 0
 
   return (
     <>
@@ -71,7 +74,7 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
           }
           actions={
             hasProjects ? (
-              <Link href="/projects/create" className={buttonClassName()}>
+              <Link href={paths.newProject} className={buttonClassName()}>
                 <Plus aria-hidden="true" />
                 New project
               </Link>
@@ -90,7 +93,7 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
               </h2>
               {hasProjects ? (
                 <Link
-                  href="/projects"
+                  href={paths.projects}
                   className="rounded-sm text-sm font-medium text-zinc-600 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-orange-600 dark:text-zinc-400 dark:hover:text-white"
                 >
                   View all
@@ -99,17 +102,17 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
             </div>
             {hasProjects ? (
               <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {projects.recent.map((project) => (
+                {recentProjects.map((project) => (
                   <li key={project.id} className="relative flex items-center gap-4 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                     <div className="min-w-0 flex-1">
                       <Link
-                        href={`/projects/${encodeURIComponent(project.id)}`}
+                        href={href(paths.project, { project: project.id })}
                         className="block truncate text-sm font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-orange-600"
                       >
                         {project.name}
                       </Link>
                       <p className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-400">
-                        {project.description.trim() || 'No description'}
+                        {project.description?.trim() || 'No description'}
                       </p>
                     </div>
                     <ProjectVisibilityBadge visibility={project.visibility} />
@@ -129,7 +132,7 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
                   title="No projects yet"
                   description="Projects are private until you publish them, and only your account can change them."
                   action={
-                    <Link href="/projects/create" className={buttonClassName()}>
+                    <Link href={paths.newProject} className={buttonClassName()}>
                       Create a project
                     </Link>
                   }
@@ -141,8 +144,8 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1">
             <StatCard
               label="Projects"
-              value={projects.total}
-              href="/projects"
+              value={projectCount}
+              href={paths.projects}
               linkLabel="Open projects"
             >
               {hasProjects ? (
@@ -154,7 +157,7 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
                     <div className="bg-emerald-500" style={{ width: `${publicShare}%` }} />
                   </div>
                   <p className="mt-2 tabular-nums">
-                    {projects.public} public · {projects.private} private
+                    {publicProjectCount} public · {projectCount - publicProjectCount} private
                   </p>
                 </>
               ) : (
@@ -164,36 +167,30 @@ export default function Dashboard({ projects, sessions }: DashboardProps) {
 
             <StatCard
               label="Signed-in devices"
-              value={sessions.active}
-              href="/sessions"
+              value={sessionCount}
+              href={paths.sessions}
               linkLabel="Manage devices"
             >
-              {currentDevice && sessions.current ? (
-                <p className="text-pretty">
-                  This device: {currentDevice.label}, signed in{' '}
-                  {formatDate(sessions.current.createdAt)}.
-                  {otherSessions > 0
-                    ? ` ${otherSessions} other ${otherSessions === 1 ? 'device' : 'devices'}.`
-                    : ' No other devices.'}
-                </p>
-              ) : (
-                <p>Your current device couldn’t be identified.</p>
-              )}
+              <p className="text-pretty">
+                This device: {device.label}, signed in {formatDate(thisDevice.createdAt)}.
+                {otherSessions > 0
+                  ? ` ${otherSessions} other ${otherSessions === 1 ? 'device' : 'devices'}.`
+                  : ' No other devices.'}
+              </p>
             </StatCard>
           </div>
         </div>
 
-        <UnderTheHood route="GET /" name="dashboard.show">
+        <UnderTheHood route="GET /" action="showDashboard">
+          <Guarantee>One Effect runs the dashboard’s four D1 reads concurrently.</Guarantee>
+          <Guarantee>Every read is scoped to the signed-in member.</Guarantee>
           <Guarantee>
-            One Effect loads your projects and devices concurrently through two
-            application services.
-          </Guarantee>
-          <Guarantee>Every D1 read is scoped to your account’s owner ID.</Guarantee>
-          <Guarantee>
-            The response is sent with <code className="font-mono text-xs">Cache-Control: no-store</code>.
+            This device comes from <code>authorize()</code>: the session row Better Auth checked for this request.
           </Guarantee>
         </UnderTheHood>
       </Layout>
     </>
   )
 }
+
+export default Dashboard

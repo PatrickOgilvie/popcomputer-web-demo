@@ -1,4 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react'
+import { href } from '@popcomputer/web/paths'
+import type { WebPage } from '@popcomputer/web/react'
 import { Check, Copy, ExternalLink, Lock, Pencil } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -9,11 +11,7 @@ import Layout from '~/components/Layout'
 import PageHeader from '~/components/PageHeader'
 import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { ProjectDetail } from '~/presentation/project'
-
-interface ShowProjectProps {
-  readonly project: ProjectDetail
-}
+import { paths } from '~/paths'
 
 const cardClassName =
   'rounded-lg border border-zinc-200 bg-white p-5 shadow-xs sm:p-6 dark:border-zinc-800 dark:bg-zinc-900'
@@ -72,22 +70,14 @@ function PublicLinkCard({ path }: { readonly path: string }) {
   )
 }
 
-/** Presents an owner-authorized project with edit and guarded delete actions. */
-export default function ShowProject({ project }: ShowProjectProps) {
-  const {
-    delete: destroy,
-    errors,
-    processing,
-    setData,
-  } = useForm({ expectedRevision: project.revision })
+/** The member's project, with editing and a confirmed delete. */
+const ShowProject: WebPage<'Projects/Show'> = ({ project }) => {
+  const { delete: destroy, processing } = useForm({})
   const [confirmsDelete, setConfirmsDelete] = useState(false)
-  const projectPath = `/projects/${encodeURIComponent(project.id)}`
-  const showcasePath = `/showcase/projects/${encodeURIComponent(project.id)}`
+  const projectPath = href(paths.project, { project: project.id })
+  const editPath = href(paths.editProject, { project: project.id })
+  const showcasePath = href(paths.publicProject, { project: project.id })
   const isPublic = project.visibility === 'public'
-
-  useEffect(() => {
-    setData('expectedRevision', project.revision)
-  }, [project.revision, setData])
 
   function handleDelete() {
     destroy(projectPath, {
@@ -102,7 +92,7 @@ export default function ShowProject({ project }: ShowProjectProps) {
         <PageHeader
           title={project.name}
           breadcrumbs={[
-            { label: 'Projects', href: '/projects' },
+            { label: 'Projects', href: paths.projects },
             { label: project.name },
           ]}
           meta={
@@ -117,7 +107,7 @@ export default function ShowProject({ project }: ShowProjectProps) {
             </>
           }
           actions={
-            <Link href={`${projectPath}/edit`} className={buttonClassName()}>
+            <Link href={editPath} className={buttonClassName()}>
               <Pencil aria-hidden="true" />
               Edit
             </Link>
@@ -130,7 +120,7 @@ export default function ShowProject({ project }: ShowProjectProps) {
               <h2 id="description-title" className="text-base font-semibold">
                 Description
               </h2>
-              {project.description.trim() ? (
+              {project.description?.trim() ? (
                 <p className="mt-2 text-sm whitespace-pre-line text-pretty text-zinc-700 sm:text-base dark:text-zinc-300">
                   {project.description}
                 </p>
@@ -138,7 +128,7 @@ export default function ShowProject({ project }: ShowProjectProps) {
                 <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                   No description yet.{' '}
                   <Link
-                    href={`${projectPath}/edit`}
+                    href={editPath}
                     className="rounded-sm font-medium text-zinc-950 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange-600 dark:text-white"
                   >
                     Add one
@@ -158,7 +148,7 @@ export default function ShowProject({ project }: ShowProjectProps) {
                 <p className="mt-1 text-sm text-pretty text-zinc-600 dark:text-zinc-400">
                   Make it public from{' '}
                   <Link
-                    href={`${projectPath}/edit`}
+                    href={editPath}
                     className="rounded-sm font-medium text-zinc-950 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange-600 dark:text-white"
                   >
                     Edit
@@ -187,10 +177,6 @@ export default function ShowProject({ project }: ShowProjectProps) {
                     <time dateTime={project.updatedAt}>{formatDateTime(project.updatedAt)}</time>
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Revision</dt>
-                  <dd className="tabular-nums">{project.revision}</dd>
-                </div>
                 <div className="flex flex-col gap-1">
                   <dt className="text-zinc-500 dark:text-zinc-400">ID</dt>
                   <dd className="font-mono text-xs break-all text-zinc-700 select-all dark:text-zinc-300">
@@ -208,16 +194,8 @@ export default function ShowProject({ project }: ShowProjectProps) {
                 Delete project
               </h2>
               <p className="mt-1 text-sm text-pretty text-zinc-600 dark:text-zinc-400">
-                Removes its content and retires this ID for good. This can’t be undone.
+                Removes it and its public page. This can’t be undone.
               </p>
-              {errors.expectedRevision && !confirmsDelete ? (
-                <p
-                  role="alert"
-                  className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-pretty text-red-800 dark:bg-red-950/50 dark:text-red-300"
-                >
-                  {errors.expectedRevision}
-                </p>
-              ) : null}
               <ConfirmationDialog
                 open={confirmsDelete}
                 onOpenChange={setConfirmsDelete}
@@ -231,28 +209,26 @@ export default function ShowProject({ project }: ShowProjectProps) {
                   </button>
                 }
                 title={`Delete “${project.name}”?`}
-                description="Its name and description are erased and its ID is retired for the lifetime of your account. This can’t be undone."
+                description="The project and its public page are removed. This can’t be undone."
                 confirmLabel="Delete project"
                 busyLabel="Deleting…"
                 busy={processing}
-                error={errors.expectedRevision}
                 onConfirm={handleDelete}
               />
             </section>
           </div>
         </div>
 
-        <UnderTheHood route="GET /projects/:project" name="projects.show">
+        <UnderTheHood route="GET /projects/{project}" action="showProject">
           <Guarantee>
-            A missing project and another account’s project both return the same 404.
+            The route binds the project, <code>bound('project')</code>, so the action never queries for it.
           </Guarantee>
-          <Guarantee>
-            Delete sends revision {project.revision}, so it can’t remove a version
-            you haven’t seen.
-          </Guarantee>
-          <Guarantee>Deleted IDs are retired and can never be reused.</Guarantee>
+          <Guarantee>A missing project and another member’s project both return the same 404.</Guarantee>
+          <Guarantee>Deleting is scoped by the bound project and its owner.</Guarantee>
         </UnderTheHood>
       </Layout>
     </>
   )
 }
+
+export default ShowProject

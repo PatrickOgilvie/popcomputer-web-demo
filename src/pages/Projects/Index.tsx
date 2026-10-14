@@ -1,4 +1,6 @@
 import { Head, Link } from '@inertiajs/react'
+import { href } from '@popcomputer/web/paths'
+import type { PagePropsFor, WebPage } from '@popcomputer/web/react'
 import { ExternalLink, FolderPlus, Plus } from 'lucide-react'
 
 import { buttonClassName } from '~/components/button'
@@ -8,22 +10,18 @@ import Layout from '~/components/Layout'
 import PageHeader from '~/components/PageHeader'
 import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { ProjectSummary } from '~/presentation/project'
+import { paths } from '~/paths'
 
-interface ProjectsIndexProps {
-  readonly projects: ReadonlyArray<ProjectSummary>
-}
-
-function summarize(projects: ReadonlyArray<ProjectSummary>): string {
+function summarize(projects: PagePropsFor<'Projects/Index'>['projects']): string {
   const publicCount = projects.filter((project) => project.visibility === 'public').length
   const noun = projects.length === 1 ? 'project' : 'projects'
   return `${projects.length} ${noun} · ${publicCount} public`
 }
 
-/** Lists the signed-in user's projects with visibility and freshness. */
-export default function ProjectsIndex({ projects }: ProjectsIndexProps) {
+/** Lists the signed-in member's projects with visibility and freshness. */
+const ProjectsIndex: WebPage<'Projects/Index'> = ({ projects }) => {
   const newProjectLink = (
-    <Link href="/projects/create" className={buttonClassName()}>
+    <Link href={paths.newProject} className={buttonClassName()}>
       <Plus aria-hidden="true" />
       New project
     </Link>
@@ -50,7 +48,7 @@ export default function ProjectsIndex({ projects }: ProjectsIndexProps) {
             title="Create your first project"
             description="Give it a name, an optional description, and choose who can see it."
             action={
-              <Link href="/projects/create" className={buttonClassName()}>
+              <Link href={paths.newProject} className={buttonClassName()}>
                 Create a project
               </Link>
             }
@@ -74,13 +72,13 @@ export default function ProjectsIndex({ projects }: ProjectsIndexProps) {
                 >
                   <div className="min-w-0">
                     <Link
-                      href={`/projects/${encodeURIComponent(project.id)}`}
+                      href={href(paths.project, { project: project.id })}
                       className="block truncate text-sm font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-orange-600"
                     >
                       {project.name}
                     </Link>
                     <p className="mt-1 line-clamp-1 text-sm text-zinc-600 dark:text-zinc-400">
-                      {project.description.trim() || 'No description'}
+                      {project.description?.trim() || 'No description'}
                     </p>
                   </div>
                   <div className="row-start-2 flex items-center gap-3 sm:row-start-auto">
@@ -96,7 +94,7 @@ export default function ProjectsIndex({ projects }: ProjectsIndexProps) {
                   <div className="col-start-2 row-start-1 flex justify-end sm:col-start-auto sm:row-start-auto">
                     {project.visibility === 'public' ? (
                       <Link
-                        href={`/showcase/projects/${encodeURIComponent(project.id)}`}
+                        href={href(paths.publicProject, { project: project.id })}
                         className={buttonClassName({ variant: 'ghost', size: 'sm', className: 'relative size-8 px-0' })}
                         aria-label={`Open the public page for ${project.name}`}
                       >
@@ -110,17 +108,16 @@ export default function ProjectsIndex({ projects }: ProjectsIndexProps) {
           </div>
         )}
 
-        <UnderTheHood route="GET /projects" name="projects.index">
-          <Guarantee>Authentication runs before any project lookup.</Guarantee>
+        <UnderTheHood route="GET /projects" action="listProjects">
+          <Guarantee>A signed-out visitor is sent to sign in before anything is read.</Guarantee>
           <Guarantee>
-            Rows are decoded with Effect Schema before they become page props.
+            The query reads exactly the columns the page's schema names, with <code>columnsOf</code>.
           </Guarantee>
-          <Guarantee>
-            The same list is served as validated JSON at{' '}
-            <code className="font-mono text-xs">/api/projects</code>.
-          </Guarantee>
+          <Guarantee>The props are encoded through that schema: nothing else reaches the browser.</Guarantee>
         </UnderTheHood>
       </Layout>
     </>
   )
 }
+
+export default ProjectsIndex

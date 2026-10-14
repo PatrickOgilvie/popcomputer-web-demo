@@ -1,4 +1,6 @@
-import { Head, useForm, usePage } from '@inertiajs/react'
+import { Head, useForm } from '@inertiajs/react'
+import { href } from '@popcomputer/web/paths'
+import type { PagePropsFor, WebPage } from '@popcomputer/web/react'
 import { Globe, Laptop, Smartphone } from 'lucide-react'
 import { useState } from 'react'
 
@@ -9,12 +11,9 @@ import Layout from '~/components/Layout'
 import PageHeader from '~/components/PageHeader'
 import { describeSessionDevice, type SessionDevice } from '~/components/session-device'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { SessionSummary } from '~/presentation/session'
-import type { PageProps } from '~/types'
+import { paths } from '~/paths'
 
-type SessionsPageProps = PageProps<{
-  readonly sessions: ReadonlyArray<SessionSummary>
-}>
+type SessionSummary = PagePropsFor<'Sessions/Index'>['sessions'][number]
 
 const deviceIcons = {
   desktop: Laptop,
@@ -22,26 +21,22 @@ const deviceIcons = {
   unknown: Globe,
 } as const satisfies Record<SessionDevice['kind'], unknown>
 
-/** Current device first, then the most recently active. */
-function orderSessions(
-  sessions: ReadonlyArray<SessionSummary>
-): ReadonlyArray<SessionSummary> {
-  return [...sessions].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) return left.isCurrent ? -1 : 1
-    return Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
-  })
+/** This device first, then the most recently active, as the server orders them. */
+function orderSessions(sessions: ReadonlyArray<SessionSummary>): ReadonlyArray<SessionSummary> {
+  return [...sessions.filter((session) => session.current), ...sessions.filter((session) => !session.current)]
 }
 
 function SessionRow({ session }: { readonly session: SessionSummary }) {
-  const { post, processing, errors, clearErrors } = useForm({ sessionId: session.id })
+  const { delete: destroy, processing } = useForm({})
   const [confirmsRevoke, setConfirmsRevoke] = useState(false)
   const device = describeSessionDevice(session.userAgent)
   const Icon = deviceIcons[device.kind]
 
   function handleRevoke() {
-    post('/sessions/revoke', {
+    destroy(href(paths.session, { session: session.id }), {
       preserveScroll: true,
-      onSuccess: () => setConfirmsRevoke(false),
+      // A refusal comes back as the page's errors.session, shown above the list.
+      onFinish: () => setConfirmsRevoke(false),
     })
   }
 
@@ -54,14 +49,14 @@ function SessionRow({ session }: { readonly session: SessionSummary }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-medium">{device.label}</h2>
-            {session.isCurrent ? (
+            {session.current ? (
               <span className="inline-flex h-6 items-center rounded-full bg-emerald-50 px-2.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-600/20 ring-inset dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20">
                 This device
               </span>
             ) : null}
           </div>
           <p className="mt-1 text-sm text-pretty text-zinc-600 tabular-nums dark:text-zinc-400">
-            {session.isCurrent ? 'Active now' : (
+            {session.current ? 'Active now' : (
               <>
                 Active{' '}
                 <time dateTime={session.updatedAt} title={formatDateTime(session.updatedAt)}>
@@ -80,17 +75,14 @@ function SessionRow({ session }: { readonly session: SessionSummary }) {
         </div>
       </div>
 
-      {session.isCurrent ? (
+      {session.current ? (
         <p className="hidden text-sm text-zinc-500 sm:block sm:w-44 sm:text-right dark:text-zinc-400">
           Use Sign out in the account menu
         </p>
       ) : (
         <ConfirmationDialog
           open={confirmsRevoke}
-          onOpenChange={(open) => {
-            if (open) clearErrors()
-            setConfirmsRevoke(open)
-          }}
+          onOpenChange={setConfirmsRevoke}
           trigger={
             <button
               type="button"
@@ -106,7 +98,6 @@ function SessionRow({ session }: { readonly session: SessionSummary }) {
           confirmLabel="Sign out device"
           busyLabel="Signing out…"
           busy={processing}
-          error={confirmsRevoke ? errors.sessionId : undefined}
           onConfirm={handleRevoke}
         />
       )}
@@ -114,17 +105,16 @@ function SessionRow({ session }: { readonly session: SessionSummary }) {
   )
 }
 
-/** Lists signed-in devices with server-owned, token-free revocation. */
-export default function SessionsIndex() {
-  const { sessions, errors } = usePage<SessionsPageProps>().props
+/** The devices signed in to the member's account, each of which they can sign out. */
+const SessionsIndex: WebPage<'Sessions/Index'> = ({ sessions, errors }) => {
   const ordered = orderSessions(sessions)
-  const otherSessionCount = sessions.filter((session) => !session.isCurrent).length
-  const { post, processing } = useForm({})
+  const otherSessionCount = sessions.filter((session) => !session.current).length
+  const { delete: destroy, processing } = useForm({})
   const [confirmsRevokeOthers, setConfirmsRevokeOthers] = useState(false)
   const otherDevices = `${otherSessionCount} other ${otherSessionCount === 1 ? 'device' : 'devices'}`
 
   function handleRevokeOthers() {
-    post('/sessions/revoke-others', {
+    destroy(paths.otherSessions, {
       preserveScroll: true,
       onSuccess: () => setConfirmsRevokeOthers(false),
     })
@@ -162,12 +152,12 @@ export default function SessionsIndex() {
           }
         />
 
-        {errors?.sessionId ? (
+        {errors.session ? (
           <p
             role="alert"
             className="rounded-md bg-red-50 px-4 py-3 text-sm text-pretty text-red-800 dark:bg-red-950/50 dark:text-red-300"
           >
-            {errors.sessionId}
+            {errors.session}
           </p>
         ) : null}
 
@@ -179,7 +169,6 @@ export default function SessionsIndex() {
             <span className="tabular-nums">
               {sessions.length} {sessions.length === 1 ? 'device' : 'devices'}
             </span>
-            <span>Up to 5 are kept per account</span>
           </div>
           {ordered.length > 0 ? (
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -194,21 +183,18 @@ export default function SessionsIndex() {
           )}
         </section>
 
-        <UnderTheHood route="GET /sessions" name="sessions.index">
+        <UnderTheHood route="GET /sessions" action="listSessions">
           <Guarantee>
-            Session tokens never reach the browser; signing a device out posts only
-            its session ID.
+            Session tokens never reach the browser: the page’s schema in <code>src/pages.ts</code> names every column it sends.
           </Guarantee>
           <Guarantee>
-            The database keeps at most five sessions per account; a sixth sign-in
-            retires the oldest.
+            Signing a device out binds the session from its URL, <code>bound('session')</code>, and another member’s session is a 404.
           </Guarantee>
-          <Guarantee>
-            Signing out revokes the session on the server before the cookie is
-            cleared.
-          </Guarantee>
+          <Guarantee>Better Auth revokes the session, through its own handler and rate limits.</Guarantee>
         </UnderTheHood>
       </Layout>
     </>
   )
 }
+
+export default SessionsIndex

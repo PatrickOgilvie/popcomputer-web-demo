@@ -1,28 +1,24 @@
 import { Head, Link, usePage } from '@inertiajs/react'
+import type { WebPage } from '@popcomputer/web/react'
 
 import { buttonClassName } from '~/components/button'
 import { formatDate } from '~/components/format'
 import Layout from '~/components/Layout'
 import ProjectVisibilityBadge from '~/components/ProjectVisibilityBadge'
 import UnderTheHood, { Guarantee } from '~/components/UnderTheHood'
-import type { PublicProject as PublicProjectResource } from '~/presentation/project'
-import type { PageProps } from '~/types'
+import { paths } from '~/paths'
 
-interface PublicProjectProps {
-  readonly project: PublicProjectResource
-}
-
-/** Presents the current public projection of a project to anyone. */
-export default function PublicProject({ project }: PublicProjectProps) {
-  const { auth } = usePage<PageProps>().props
-  const isSignedIn = Boolean(auth?.user)
+/** A public project, readable by anyone. */
+const PublicProject: WebPage<'Projects/Public'> = ({ project }) => {
+  const { auth } = usePage().props
+  const isSignedIn = auth.user !== null
 
   return (
     <>
       <Head title={project.name}>
         <meta
           name="description"
-          content={project.description.trim() || `Public project: ${project.name}`}
+          content={project.description?.trim() || `Public project: ${project.name}`}
         />
       </Head>
       <Layout>
@@ -40,7 +36,7 @@ export default function PublicProject({ project }: PublicProjectProps) {
             </h1>
           </header>
 
-          {project.description.trim() ? (
+          {project.description?.trim() ? (
             <p className="text-base whitespace-pre-line text-pretty text-zinc-700 sm:text-lg dark:text-zinc-300">
               {project.description}
             </p>
@@ -57,7 +53,7 @@ export default function PublicProject({ project }: PublicProjectProps) {
                 : 'Shared from the popcomputer/web demo. Create an account to publish your own.'}
             </p>
             <Link
-              href={isSignedIn ? '/projects' : '/register'}
+              href={isSignedIn ? paths.projects : paths.register}
               className={buttonClassName({ variant: isSignedIn ? 'secondary' : 'primary' })}
             >
               {isSignedIn ? 'Your projects' : 'Create an account'}
@@ -65,18 +61,20 @@ export default function PublicProject({ project }: PublicProjectProps) {
           </footer>
         </article>
 
-        <UnderTheHood route="GET /showcase/projects/{project}" name="projects.public">
+        <UnderTheHood route="GET /showcase/projects/{project}" action="showPublicProject">
           <Guarantee>
-            The project is loaded by declarative route model binding and its row is
-            schema-checked.
+            The route binds the project, <code>bound('project')</code>, and a private one is the same 404 as a missing one.
           </Guarantee>
           <Guarantee>
-            Never cached at the edge: a project made private or deleted disappears on
-            the next request.
+            Rendered per request: a project made private or deleted disappears on the next visit.
           </Guarantee>
-          <Guarantee>Only the name, description, and update time reach the browser.</Guarantee>
+          <Guarantee>
+            Only the name, description, and update time reach the browser: the page’s schema in <code>src/pages.ts</code> drops the rest.
+          </Guarantee>
         </UnderTheHood>
       </Layout>
     </>
   )
 }
+
+export default PublicProject

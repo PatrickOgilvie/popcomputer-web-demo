@@ -6,8 +6,8 @@ import { cn } from '~/components/cn'
 interface UnderTheHoodProps {
   /** Method and path, for example `GET /projects`. */
   readonly route: string
-  /** Name registered for the route in `src/routes.ts`. */
-  readonly name: string
+  /** The action in `src/actions` that answers it, for example `createProject`. */
+  readonly action: string
   /** Lists guarantees in one column for narrow placements. */
   readonly compact?: boolean
   readonly children: ReactNode
@@ -16,7 +16,7 @@ interface UnderTheHoodProps {
 /** States which framework guarantees the current page demonstrates. */
 export default function UnderTheHood({
   route,
-  name,
+  action,
   compact = false,
   children,
 }: UnderTheHoodProps) {
@@ -33,7 +33,7 @@ export default function UnderTheHood({
         <p className="flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-600 dark:text-zinc-400">
           <span>{route}</span>
           <span aria-hidden="true">·</span>
-          <span>{name}</span>
+          <span>{action}</span>
         </p>
       </div>
       <ul

@@ -1,13 +1,16 @@
 import { Head, useForm } from '@inertiajs/react'
+import type { FormInput } from '@popcomputer/web/react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
 
 import AuthShell from '~/components/AuthShell'
 import { buttonClassName } from '~/components/button'
 import TextField from '~/components/TextField'
+import type { Register as RegisterForm } from '~/forms'
+import { paths } from '~/paths'
 
 export default function Register() {
-  const { data, setData, post, processing, errors, clearErrors } = useForm({
+  const { data, setData, post, processing, errors, clearErrors } = useForm<FormInput<typeof RegisterForm>>({
     name: '',
     email: '',
     password: '',
@@ -23,7 +26,7 @@ export default function Register() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    post('/register')
+    post(paths.register)
   }
 
   return (
@@ -33,10 +36,10 @@ export default function Register() {
         title="Create your account"
         description="It takes a few seconds. Everything you create stays in this demo’s database."
         alternatePrompt="Already have an account?"
-        alternateHref="/login"
+        alternateHref={paths.login}
         alternateLabel="Sign in"
         route="POST /register"
-        routeName="registration.store"
+        action="signUp"
       >
         <form ref={formRef} className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <TextField
@@ -75,7 +78,7 @@ export default function Register() {
             label="Password"
             autoComplete="new-password"
             required
-            hint="At least 8 characters."
+            hint="At least 12 characters."
             value={data.password}
             error={errors.password}
             onChange={(event) => {

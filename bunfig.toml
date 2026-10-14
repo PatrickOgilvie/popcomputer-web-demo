@@ -1,0 +1,3 @@
+[test]
+# Stops the test databases' Miniflare once every test file is done.
+preload = ["./test/preload.ts"]
