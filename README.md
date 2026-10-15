@@ -1,11 +1,42 @@
-# popcomputer-web-demo
+<img src="src/assets/popcomputer.png" alt="Popcomputer" width="374" height="69">
 
-A starting point for an application on
-[@popcomputer/web](https://github.com/PatrickOgilvie/popcomputer-web): React
-pages served by Inertia from a Cloudflare Worker, with Effect actions, D1 and
-Better Auth. Use it as a template, or deploy it as it is.
+# @popcomputer/web demo
+
+A complete application on @popcomputer/web, to start yours from.
+
+React pages served by Inertia from a Cloudflare Worker, with Effect actions,
+D1 and Better Auth, built on
+[@popcomputer/web](https://github.com/PatrickOgilvie/popcomputer-web). Its
+[README](https://github.com/PatrickOgilvie/popcomputer-web#readme) explains
+each part; this repository shows them working together. Use it as a
+template, or deploy it as it is.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/PatrickOgilvie/popcomputer-web-demo)
+
+```ts
+// src/actions/projects.ts
+export const updateProject = action(
+  Effect.gen(function* () {
+    const project = yield* ownProject
+    const input = yield* validateRequest(ProjectForm)
+    const updatedAt = DateTime.toDateUtc(yield* DateTime.now)
+
+    yield* dbMutation((db) =>
+      db.update(projects)
+        .set({ ...input, updatedAt })
+        .where(and(eq(projects.id, project.id), eq(projects.userId, project.userId)))
+    )
+    yield* flash('success', 'Project saved.')
+
+    return yield* redirect(paths.project, { project: project.id })
+  })
+)
+```
+
+## Contents
+
+- [What it does](#what-it-does) · [How it's built](#how-its-built) · [Running it locally](#running-it-locally) · [Checks](#checks)
+- [Changing the database](#changing-the-database) · [Deploying](#deploying) · [Upgrading](#upgrading) · [Working with coding agents](#working-with-coding-agents)
 
 ## What it does
 
@@ -19,35 +50,41 @@ Better Auth. Use it as a template, or deploy it as it is.
 - **Signed-in devices.** List the devices signed in to the account, and sign
   any other one, or all of them, out.
 
-Each page ends with an "Under the hood" panel naming the action that answers
-it and what the framework guarantees there.
+Each page past sign-in, and the public project page, ends with an "Under the
+hood" panel naming the action that answers it and what the framework
+guarantees there.
 
 ## How it's built
 
-Every name is declared once, and the rest derives from it:
+- **Every name is declared once, and the rest derives from it.** A renamed
+  column, prop or path placeholder is a type error wherever it is used:
 
-| File | Declares |
-| --- | --- |
-| `src/paths.ts` | Every URL. Actions redirect to them and React links to them with `href`. |
-| `src/schema.ts` | The D1 tables, with their limits as `CHECK` constraints. |
-| `src/forms.ts` | The schemas forms are validated with, which type the forms in React too. |
-| `src/pages.ts` | Each page's props, taken from the tables' columns. A column a page doesn't name never reaches the browser. |
-| `src/app.ts` | `setupWeb`: rendering, D1, Better Auth, route model binding, flash messages and the error page. |
-| `src/routes.ts` | Every route and the action that answers it. |
+  | File | Declares |
+  | --- | --- |
+  | `src/paths.ts` | Every URL. Actions redirect to them and React links to them with `href`. |
+  | `src/schema.ts` | The D1 tables, with their limits as `CHECK` constraints. |
+  | `src/forms.ts` | The schemas forms are validated with, which type the forms in React too. |
+  | `src/pages.ts` | Each page's props, taken from the tables' columns. A column a page doesn't name never reaches the browser. |
+  | `src/app.ts` | `setupWeb`: rendering, D1, Better Auth, route model binding, flash messages and the error page. |
+  | `src/routes.ts` | Every route and the action that answers it. |
 
-An action reads its record from the URL rather than querying for it:
+- **An action reads its record from the URL** rather than querying for it,
+  and answers a record its visitor may not see as not found:
 
-```ts
-// src/actions/projects.ts
-const ownProject = Effect.gen(function* () {
-  const auth = yield* authorize()
-  const project = yield* bound('project')
+  ```ts
+  // src/actions/projects.ts
+  const ownProject = Effect.gen(function* () {
+    const auth = yield* authorize()
+    const project = yield* bound('project')
 
-  if (project.userId !== auth.user.id) return yield* notFound('Project')
+    if (project.userId !== auth.user.id) return yield* notFound('Project')
 
-  return project
-})
-```
+    return project
+  })
+  ```
+
+- **A failed form goes back to its page** with its errors beside the fields,
+  and the page keeps everything it showed.
 
 The rest of the tree:
 
@@ -148,11 +185,23 @@ Better Auth takes its origin from each request, so the Worker works on
 `workers.dev` and on any custom domain routed to it, with nothing more to
 configure.
 
+## Upgrading
+
+An app made from this template keeps the version of @popcomputer/web it
+started with. To move it to a newer release, follow the framework's
+[upgrade guide](https://github.com/PatrickOgilvie/popcomputer-web/blob/main/UPGRADING.md),
+whose installed copy is `node_modules/@popcomputer/web/UPGRADING.md`; its
+[changelog](https://github.com/PatrickOgilvie/popcomputer-web/blob/main/CHANGELOG.md)
+lists what each release changes.
+
 ## Working with coding agents
 
 `AGENTS.md` tells an agent where each thing is declared and how to add a page.
 `CLAUDE.md` loads it along with the framework's own rules, from
-`node_modules/@popcomputer/web/AGENTS.md`.
+`node_modules/@popcomputer/web/AGENTS.md`, which name the one API to use for
+each task. The framework's
+[Which API for which task](https://github.com/PatrickOgilvie/popcomputer-web#which-api-for-which-task)
+table lists the same for people.
 
 ## License
 
