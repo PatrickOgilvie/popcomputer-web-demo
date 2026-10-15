@@ -101,40 +101,58 @@ test/           tests through the app, each on a D1 database of its own
 
 ## Running it locally
 
-You need [Bun](https://bun.sh). Create an app of your own from the template,
-which downloads it and installs its dependencies:
+### Once per computer
+
+You need [Node.js](https://nodejs.org) 22 or later, [Bun](https://bun.sh) and
+[portless](https://github.com/vercel-labs/portless) running in the background.
+Wrangler, Vite and everything else come with each app.
+
+1. Install Node.js with the LTS installer from <https://nodejs.org>. It asks
+   for your password.
+2. Install Bun, then open a new terminal:
+
+   ```bash
+   curl -fsSL https://bun.sh/install | bash
+   ```
+
+3. Install portless, and have it start with your computer:
+
+   ```bash
+   bun add -g portless@0.15.7
+   portless service install
+   ```
+
+   `portless service install` asks for your password once. It trusts a local
+   certificate for `https://*.localhost` and serves those addresses on port
+   443, after every restart too. A coding agent can't enter a password, so run
+   this in your own terminal.
+
+### Each app
 
 ```bash
 bun create PatrickOgilvie/popcomputer-web-demo my-app
-```
-
-Or, in a copy you cloned or made with GitHub's "Use this template":
-
-```bash
-bun install
-```
-
-Then, in the app's folder, copy the local secrets file, and replace its
-placeholder with the output of `openssl rand -base64 32`:
-
-```bash
-cp .dev.vars.example .dev.vars
-```
-
-Create the local D1 database's tables:
-
-```bash
-bun run db:migrate:local
-```
-
-Start Vite and the Worker together:
-
-```bash
+cd my-app
 bun run dev
 ```
 
-Open <http://localhost:8787>. The pages load from Vite on port 5173, so an
-edit shows in the browser as you save it.
+Open <https://my-app.localhost>. The app's address is its name, which
+`bun create` takes from the folder you chose; its Worker and database on
+Cloudflare take the same name.
+
+`bun run dev` does the setup a new app needs. The first time, it writes
+`.dev.vars` with a new secret for signing in, and each time it applies any new
+migrations to the local D1 database. Then it runs the Worker and Vite together
+through portless, which gives each app a name instead of a port, so an edit
+shows in the browser as you save it. If Node.js is missing, it says so and
+stops.
+
+Without the portless service, `bun run dev` asks for your password the first
+time it runs, and again after a restart. `PORTLESS=0 bun run dev` skips
+portless and serves the app at <http://localhost:8787>, with Vite on port 5173.
+
+In a copy you cloned or made with GitHub's "Use this template", run
+`bun install` first; the app's address then comes from `name` in
+`package.json`.
 
 ## Checks
 
@@ -168,11 +186,18 @@ creates the D1 database and asks for `BETTER_AUTH_SECRET`: give it a new value
 from `openssl rand -base64 32`, not the placeholder. Its deploy applies the
 migrations, then deploys the Worker.
 
-**By hand**, the first time, create the D1 database, which writes its id into
-`wrangler.jsonc`, and upload a new secret:
+**By hand**, the first time, sign in to Cloudflare. This opens your browser
+to allow Wrangler into your account; a free account is enough:
 
 ```bash
-bun run setup
+bun run cloudflare:login
+```
+
+Then create the app's D1 database, which writes its id into `wrangler.jsonc`,
+and upload a new secret for signing in:
+
+```bash
+bun run cloudflare:setup
 ```
 
 Then build, migrate and deploy, now and after every change:

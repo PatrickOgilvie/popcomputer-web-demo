@@ -28,7 +28,11 @@ export const web = setupWeb(new Hono<Env>(), {
   // otherwise from the bundle `bun run build` wrote.
   render: createTemplate((c) =>
     c.env.ENVIRONMENT === 'development'
-      ? { title, scripts: [vite.script('/src/main.tsx')], head: `${head}\n    ${vite.hmrHead()}` }
+      ? {
+          title,
+          scripts: [vite.script('/src/main.tsx', c.env.DEV_VITE_ORIGIN)],
+          head: `${head}\n    ${vite.hmrHead(c.env.DEV_VITE_ORIGIN)}`,
+        }
       : { title, scripts: [`/${entry.file}`], styles: (entry.css ?? []).map((file) => `/${file}`), head }
   ),
   database: (c) => createDb(c.env.DB),
