@@ -8,6 +8,7 @@ export interface CreateAuthOptions {
   readonly secret: string
   readonly baseURL: string
   readonly advanced?: BetterAuthOptions['advanced']
+  readonly logger?: BetterAuthOptions['logger']
 }
 
 export function createAuth(options: CreateAuthOptions) {
@@ -16,6 +17,7 @@ export function createAuth(options: CreateAuthOptions) {
     secret: options.secret,
     baseURL: options.baseURL,
     emailAndPassword: { enabled: true },
+    logger: options.logger,
     // setupWeb's auth.signInLimits limits signing in, up and every password
     // call by address and account. Better Auth's own limits stay on too, in
     // each isolate's memory, writing nothing.

@@ -5,7 +5,8 @@ export type Bindings = {
   DB: D1Database
   BETTER_AUTH_SECRET: string
   SIGN_IN_LIMITER: RateLimit
-  ENVIRONMENT?: 'development' | 'production'
+  /** `bun run dev` sets development, wrangler.jsonc production, and the tests test. */
+  ENVIRONMENT?: 'development' | 'production' | 'test'
   /** Where Vite serves the pages in development; `bun run dev` sets it. */
   DEV_VITE_ORIGIN?: string
 }

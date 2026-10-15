@@ -1,4 +1,4 @@
-# popcomputer-web-demo for coding agents
+# For coding agents
 
 This application is built on `@popcomputer/web`. Follow
 `node_modules/@popcomputer/web/AGENTS.md`: its rules name the one API for each

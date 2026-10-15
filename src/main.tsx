@@ -13,6 +13,7 @@ import ProjectsIndex from './pages/Projects/Index'
 import PublicProject from './pages/Projects/Public'
 import ShowProject from './pages/Projects/Show'
 import SessionsIndex from './pages/Sessions/Index'
+import { appTitle } from './title'
 
 // Every registered page's component: a page without one is a type error.
 const components: { readonly [Name in PageName]: WebPage<Name> } = {
@@ -30,7 +31,7 @@ const components: { readonly [Name in PageName]: WebPage<Name> } = {
 const isPage = (name: string): name is PageName => name in components
 
 void createInertiaApp({
-  title: (title) => (title ? `${title} · popcomputer/web demo` : 'popcomputer/web demo'),
+  title: (title) => (title ? `${title} · ${appTitle}` : appTitle),
   // The error page is not a registered page: it answers any other name.
   resolve: (name) => (isPage(name) ? components[name] : ErrorPage),
   setup({ el, App, props }) {

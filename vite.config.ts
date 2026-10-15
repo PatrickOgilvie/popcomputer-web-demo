@@ -22,6 +22,9 @@ export default defineConfig({
   build: {
     // The Worker's page shell reads the bundle's files from the manifest.
     manifest: 'manifest.json',
+    // React, Inertia and the framework's client come to about 600 kB before an
+    // app adds anything, past Vite's 500 kB warning.
+    chunkSizeWarningLimit: 1000,
     outDir: 'dist',
     rollupOptions: { input: 'src/main.tsx' },
   },

@@ -105,10 +105,14 @@ test/           tests through the app, each on a D1 database of its own
 
 You need [Node.js](https://nodejs.org) 24 or later, [Bun](https://bun.sh) and
 [portless](https://github.com/vercel-labs/portless) running in the background.
-Wrangler, Vite and everything else come with each app.
+Wrangler, Vite and everything else come with each app. Portless needs Node.js
+24; Wrangler runs on 22, and `bun run dev` stops with directions on anything
+older.
 
 1. Install Node.js with the LTS installer from <https://nodejs.org>. It asks
-   for your password.
+   for your password. If you use [nvm](https://github.com/nvm-sh/nvm), its
+   Node.js comes first instead: run `nvm install 24` and
+   `nvm alias default 24`.
 2. Install Bun, then open a new terminal:
 
    ```bash
@@ -144,7 +148,7 @@ Cloudflare take the same name when you first set it up there.
 migrations to the local D1 database. Then it runs the Worker and Vite together
 through portless, which gives each app a name instead of a port, so an edit
 shows in the browser as you save it. If Node.js is missing, it says so and
-stops.
+stops. Stop the app with Ctrl-C.
 
 Without the portless service, `bun run dev` asks for your password the first
 time it runs, and again after a restart. `PORTLESS=0 bun run dev` skips
@@ -176,6 +180,9 @@ bun run db:generate
 ```bash
 bun run db:migrate:local
 ```
+
+`bun run dev` also applies new migrations when it starts, so restarting it
+does the same.
 
 Don't edit a migration that has been applied anywhere; add another.
 

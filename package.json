@@ -8,8 +8,8 @@
   "scripts": {
     "postinstall": "bun run build",
     "build": "vite build",
-    "dev": "portless run bun scripts/dev.ts",
-    "check": "tsc --noEmit && oxlint && bun test",
+    "dev": "bun scripts/run-dev.ts",
+    "check": "tsc --noEmit && echo 'Types: no errors' && oxlint && echo 'Lint: no problems' && bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",

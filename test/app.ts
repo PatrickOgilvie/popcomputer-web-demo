@@ -13,6 +13,7 @@ export async function freshEnv() {
     DB: await databases.fresh(),
     BETTER_AUTH_SECRET: 'test-only-secret-0123456789abcdef0123456789',
     SIGN_IN_LIMITER: testRateLimiter(),
+    ENVIRONMENT: 'test',
   })
 }
 

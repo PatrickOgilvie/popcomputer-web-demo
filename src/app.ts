@@ -10,9 +10,10 @@ import type { Env } from './env'
 import { pages } from './pages'
 import { paths } from './paths'
 import * as schema from './schema'
+import { appTitle } from './title'
 
 const entry = manifest['src/main.tsx']
-const title = 'popcomputer/web demo'
+const title = appTitle
 
 // Browser chrome follows the page in both color schemes.
 const head = [
@@ -47,6 +48,9 @@ export const web = setupWeb(new Hono<Env>(), {
         secret: c.env.BETTER_AUTH_SECRET,
         baseURL: new URL(c.req.url).origin,
         advanced: { backgroundTasks },
+        // The tests sign in with wrong passwords on purpose, and Better Auth
+        // warns at each one.
+        logger: { disabled: c.env.ENVIRONMENT === 'test' },
       }),
     session: betterAuthSession(tableSchema(schema.user), tableSchema(schema.session)),
     // Slows password guessing: the Rate Limiting binding wrangler.jsonc
