@@ -181,9 +181,12 @@ export function ensureDevVars(path = '.dev.vars'): 'written' | 'replaced' | 'kep
   return 'replaced'
 }
 
-/** How many migrations wrangler's output says it applied: one ✅ for each. */
+/**
+ * How many migrations wrangler's output says it applied: one ✅ in its status
+ * table for each. Its "✅ No migrations to apply!" has no table, so counts none.
+ */
 export function countAppliedMigrations(output: string): number {
-  return output.match(/✅/g)?.length ?? 0
+  return output.match(/│\s*✅\s*│/g)?.length ?? 0
 }
 
 /**
@@ -202,9 +205,13 @@ function applyLocalMigrations(): void {
 /** Lines of wrangler's notice that local crons don't run, which a person needn't act on. */
 const CRON_NOTICE_LINES = 6
 
+/** Lines of wrangler's list of Local Explorer routes, shown when an AI agent runs it. */
+const EXPLORER_NOTICE_LINES = 20
+
 /**
  * Rewrites the two servers' output for a person: it drops wrangler's notice
- * that crons don't run locally, says where to open the app once the Worker is
+ * that crons don't run locally, shortens its list of routes for AI agents to
+ * the one address, says where to open the app once the Worker is
  * ready, and after Ctrl-C drops the servers' exit codes, which read like
  * failures. The notice is skipped for at most a few lines, so a change to its
  * wording never hides anything after it.
@@ -214,7 +221,18 @@ export function createOutputFilter(
   stopping: () => boolean
 ): (line: string) => ReadonlyArray<string> {
   let cronNoticeLeft = 0
+  let explorerNoticeLeft = 0
   return (line) => {
+    // An agent's run lists every Local Explorer route; one line keeps where it is.
+    if (line.includes('Wrangler detected this dev session is running in an AI agent')) {
+      explorerNoticeLeft = EXPLORER_NOTICE_LINES
+      return []
+    }
+    if (explorerNoticeLeft > 0) {
+      explorerNoticeLeft = line.trimEnd().endsWith('- OpenAPI schema') ? 0 : explorerNoticeLeft - 1
+      const explorer = /The Local Explorer API is available at (\S+)/.exec(line)
+      return explorer === null ? [] : [`[worker] Local Explorer, for the local database, KV and traces: ${explorer[1]}`]
+    }
     if (line.includes('Scheduled Workers are not automatically triggered')) {
       cronNoticeLeft = CRON_NOTICE_LINES
       return []

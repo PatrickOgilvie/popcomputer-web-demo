@@ -156,6 +156,20 @@ Until you first set the app up on Cloudflare, Wrangler's output shows the
 template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
 gives the Worker and its database the app's name.
 
+If the address shows portless's "404 - Not Found" page, the app isn't running:
+start it with `bun run dev`, whatever command that page suggests.
+
+To try a form from a terminal, post its fields with curl, which the app
+answers as a command-line client: a form that fails validation gets a 422
+with the errors as JSON, and a sign-up a 303 to `/` with its session cookie.
+
+```bash
+curl -i https://my-app.localhost/register -c cookies.txt \
+  --data-urlencode 'name=Ada' --data-urlencode 'email=ada@example.com' \
+  --data-urlencode 'password=at least twelve characters'
+curl -b cookies.txt https://my-app.localhost/
+```
+
 Without the portless service, `bun run dev` asks for your password the first
 time it runs, and again after a restart. `PORTLESS=0 bun run dev` skips
 portless and serves the app at <http://localhost:8787>, with Vite on port 5173.

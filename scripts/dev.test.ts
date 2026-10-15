@@ -217,9 +217,30 @@ describe('first run, copied example', () => {
 })
 
 describe('local migrations', () => {
-  test("counts the migrations wrangler's table marks applied", () => {
-    expect(countAppliedMigrations('│ 0000_initial.sql │ ✅     │\n│ 0001_links.sql │ ✅     │')).toBe(2)
-    expect(countAppliedMigrations('✅ No migrations to apply!'.replace('✅ ', ''))).toBe(0)
+  // wrangler's output, word for word, after applying one migration and with none to apply.
+  const applied = [
+    'Migrations to be applied:',
+    '┌──────────────────┐',
+    '│ name             │',
+    '├──────────────────┤',
+    '│ 0000_initial.sql │',
+    '└──────────────────┘',
+    '🚣 14 commands executed successfully.',
+    '┌──────────────────┬────────┐',
+    '│ name             │ status │',
+    '├──────────────────┼────────┤',
+    '│ 0000_initial.sql │ ✅     │',
+    '└──────────────────┴────────┘',
+  ].join('\n')
+  const upToDate = [' ⛅️ wrangler 4.151.0', '────────────────────', 'Resource location: local ', '✅ No migrations to apply!'].join('\n')
+
+  test("counts the migrations wrangler's status table marks applied", () => {
+    expect(countAppliedMigrations(applied)).toBe(1)
+    expect(countAppliedMigrations(`${applied}\n│ 0001_links.sql   │ ✅     │`)).toBe(2)
+  })
+
+  test('counts none when there was nothing to apply', () => {
+    expect(countAppliedMigrations(upToDate)).toBe(0)
   })
 })
 
@@ -246,6 +267,24 @@ describe('server output', () => {
     const later = Array.from({ length: 10 }, (_, line) => `[worker] line ${line}`).flatMap(filter)
 
     expect(later).toHaveLength(4)
+  })
+
+  test("shortens wrangler's routes for AI agents to the Local Explorer's address", () => {
+    const filter = createOutputFilter(app, () => false)
+    const shown = [
+      '[worker] Wrangler detected this dev session is running in an AI agent.',
+      '[worker] The Local Explorer API is available at http://127.0.0.1:4964/cdn-cgi/local/explorer/api',
+      '[worker] Useful routes:',
+      '[worker]   GET http://127.0.0.1:4964/cdn-cgi/local/explorer/api/d1/database - D1 databases',
+      "[worker] If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):",
+      '[worker]   GET http://127.0.0.1:4964/cdn-cgi/local/explorer/api - OpenAPI schema',
+      '[worker] ⎔ Starting local server...',
+    ].flatMap(filter)
+
+    expect(shown).toEqual([
+      '[worker] Local Explorer, for the local database, KV and traces: http://127.0.0.1:4964/cdn-cgi/local/explorer/api',
+      '[worker] ⎔ Starting local server...',
+    ])
   })
 
   test("drops the servers' exit codes only after Ctrl-C", () => {
