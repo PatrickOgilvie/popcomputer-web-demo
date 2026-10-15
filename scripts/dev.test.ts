@@ -3,11 +3,7 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  InvalidDevOrigin,
-  readViteDevServerConfiguration,
-  VITE_ROUTE_NAME,
-} from './dev-environment'
+import { InvalidDevOrigin, readViteDevServerConfiguration } from './dev-environment'
 import {
   createDevCommands,
   createDevServerEnvironment,
@@ -15,18 +11,24 @@ import {
   ensureDevVars,
   InvalidPortlessPort,
   nodeProblem,
+  type PortlessProcessEnvironment,
   readDevSession,
 } from './dev'
+
+// A sample app, so the tests pass whatever name bun create gave this one.
+const SAMPLE_VITE_ROUTE = 'vite.sample-app'
+const readSampleSession = (environment: PortlessProcessEnvironment, resolveUrl?: (routeName: string) => string) =>
+  readDevSession(environment, resolveUrl, SAMPLE_VITE_ROUTE)
 
 const resolveHttpsVite = (routeName: string) => `https://${routeName}.localhost`
 
 describe('development session', () => {
   test('pairs the portless Worker route with its sibling Vite route', () => {
     const resolved: Array<string> = []
-    const session = readDevSession(
+    const session = readSampleSession(
       {
         PORT: '4123',
-        PORTLESS_URL: 'https://popcomputer-web-demo.localhost',
+        PORTLESS_URL: 'https://sample-app.localhost',
       },
       (routeName) => {
         resolved.push(routeName)
@@ -34,34 +36,34 @@ describe('development session', () => {
       }
     )
 
-    expect(resolved).toEqual([VITE_ROUTE_NAME])
+    expect(resolved).toEqual([SAMPLE_VITE_ROUTE])
     expect(session.mode).toBe('portless')
     expect(session.workerPort).toBe(4123)
     expect(session.workerOrigin.origin).toBe(
-      'https://popcomputer-web-demo.localhost'
+      'https://sample-app.localhost'
     )
     expect(session.viteOrigin.origin).toBe(
-      'https://vite.popcomputer-web-demo.localhost'
+      'https://vite.sample-app.localhost'
     )
   })
 
   test('keeps worktree prefixes and explicit proxy ports from portless', () => {
-    const session = readDevSession(
+    const session = readSampleSession(
       {
         PORT: '4999',
-        PORTLESS_URL: 'http://fix-ui.popcomputer-web-demo.localhost:1355',
+        PORTLESS_URL: 'http://fix-ui.sample-app.localhost:1355',
       },
-      () => 'http://fix-ui.vite.popcomputer-web-demo.localhost:1355'
+      () => 'http://fix-ui.vite.sample-app.localhost:1355'
     )
 
     expect(createDevServerEnvironment(session)).toEqual({
-      DEV_VITE_ORIGIN: 'http://fix-ui.vite.popcomputer-web-demo.localhost:1355',
-      DEV_WORKER_ORIGIN: 'http://fix-ui.popcomputer-web-demo.localhost:1355',
+      DEV_VITE_ORIGIN: 'http://fix-ui.vite.sample-app.localhost:1355',
+      DEV_WORKER_ORIGIN: 'http://fix-ui.sample-app.localhost:1355',
     })
   })
 
   test('falls back to one fixed loopback pair when portless is bypassed', () => {
-    const session = readDevSession({}, () => {
+    const session = readSampleSession({}, () => {
       throw new Error('portless must not be consulted in direct mode')
     })
 
@@ -76,8 +78,8 @@ describe('development session', () => {
     'rejects an invalid portless PORT %p',
     (PORT) => {
       expect(() =>
-        readDevSession(
-          { PORT, PORTLESS_URL: 'https://popcomputer-web-demo.localhost' },
+        readSampleSession(
+          { PORT, PORTLESS_URL: 'https://sample-app.localhost' },
           resolveHttpsVite
         )
       ).toThrow(InvalidPortlessPort)
@@ -86,23 +88,23 @@ describe('development session', () => {
 
   test.each([
     'https://example.com',
-    'https://popcomputer-web-demo.localhost/',
-    'https://popcomputer-web-demo.localhost/path',
-    'https://user:pass@popcomputer-web-demo.localhost',
-    'ftp://popcomputer-web-demo.localhost',
+    'https://sample-app.localhost/',
+    'https://sample-app.localhost/path',
+    'https://user:pass@sample-app.localhost',
+    'ftp://sample-app.localhost',
   ])('rejects a non-local or non-exact route origin %p', (PORTLESS_URL) => {
     expect(() =>
-      readDevSession({ PORT: '4123', PORTLESS_URL }, resolveHttpsVite)
+      readSampleSession({ PORT: '4123', PORTLESS_URL }, resolveHttpsVite)
     ).toThrow(InvalidDevOrigin)
   })
 })
 
 describe('development commands', () => {
   test('runs Vite as a portless route and Wrangler at the public origin', () => {
-    const session = readDevSession(
+    const session = readSampleSession(
       {
         PORT: '4123',
-        PORTLESS_URL: 'https://popcomputer-web-demo.localhost',
+        PORTLESS_URL: 'https://sample-app.localhost',
       },
       resolveHttpsVite
     )
@@ -110,18 +112,18 @@ describe('development commands', () => {
     expect(createDevCommands(session)).toEqual([
       {
         name: 'vite',
-        command: 'portless run --name vite.popcomputer-web-demo vite',
+        command: 'portless run --name vite.sample-app vite',
       },
       {
         name: 'worker',
         command:
-          'wrangler dev --port 4123 --ip 127.0.0.1 --local-upstream popcomputer-web-demo.localhost --upstream-protocol https --var ENVIRONMENT:development --var DEV_VITE_ORIGIN:https://vite.popcomputer-web-demo.localhost',
+          'wrangler dev --port 4123 --ip 127.0.0.1 --local-upstream sample-app.localhost --upstream-protocol https --var ENVIRONMENT:development --var DEV_VITE_ORIGIN:https://vite.sample-app.localhost',
       },
     ])
   })
 
   test('pins strict default ports when portless is bypassed', () => {
-    const [vite, worker] = createDevCommands(readDevSession({}))
+    const [vite, worker] = createDevCommands(readSampleSession({}))
 
     expect(vite?.command).toBe('vite --port 5173 --strictPort')
     expect(worker?.command).toContain('--port 8787')
@@ -134,17 +136,17 @@ describe('Vite development policy', () => {
   test('restricts CORS to the exact paired Worker origin', () => {
     expect(
       readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.popcomputer-web-demo.localhost',
-        DEV_WORKER_ORIGIN: 'https://popcomputer-web-demo.localhost',
+        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
+        DEV_WORKER_ORIGIN: 'https://sample-app.localhost',
       })
     ).toEqual({
-      viteOrigin: 'https://vite.popcomputer-web-demo.localhost',
-      workerOrigin: 'https://popcomputer-web-demo.localhost',
+      viteOrigin: 'https://vite.sample-app.localhost',
+      workerOrigin: 'https://sample-app.localhost',
     })
 
     expect(() =>
       readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.popcomputer-web-demo.localhost',
+        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
         DEV_WORKER_ORIGIN: 'https://example.com',
       })
     ).toThrow('DEV_WORKER_ORIGIN must be an exact local HTTP(S) origin.')
@@ -157,7 +159,7 @@ describe('Vite development policy', () => {
   test('requires both origins once either is supplied', () => {
     expect(() =>
       readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.popcomputer-web-demo.localhost',
+        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
       })
     ).toThrow('DEV_WORKER_ORIGIN must be an exact local HTTP(S) origin.')
   })

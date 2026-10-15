@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "postinstall": "bun scripts/app-name.ts && bun run build",
+    "postinstall": "bun run build",
     "build": "vite build",
     "dev": "portless run bun scripts/dev.ts",
     "check": "tsc --noEmit && oxlint && bun test",
@@ -16,8 +16,8 @@
     "cloudflare:login": "wrangler login",
     "cloudflare:setup": "bun run cloudflare:database && bun run cloudflare:secret",
     "cloudflare:database": "bun scripts/cloudflare-database.ts",
-    "cloudflare:secret": "openssl rand -base64 32 | wrangler secret put BETTER_AUTH_SECRET",
-    "deploy": "bun run build && bun run db:migrate && wrangler deploy"
+    "cloudflare:secret": "bun scripts/app-name.ts && openssl rand -base64 32 | wrangler secret put BETTER_AUTH_SECRET",
+    "deploy": "bun scripts/app-name.ts && bun run build && bun run db:migrate && wrangler deploy"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

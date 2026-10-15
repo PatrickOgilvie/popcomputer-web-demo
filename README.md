@@ -103,7 +103,7 @@ test/           tests through the app, each on a D1 database of its own
 
 ### Once per computer
 
-You need [Node.js](https://nodejs.org) 22 or later, [Bun](https://bun.sh) and
+You need [Node.js](https://nodejs.org) 24 or later, [Bun](https://bun.sh) and
 [portless](https://github.com/vercel-labs/portless) running in the background.
 Wrangler, Vite and everything else come with each app.
 
@@ -136,8 +136,8 @@ bun run dev
 ```
 
 Open <https://my-app.localhost>. The app's address is its name, which
-`bun create` takes from the folder you chose; its Worker and database on
-Cloudflare take the same name.
+`bun create` takes from the folder you chose. Its Worker and database on
+Cloudflare take the same name when you first set it up there.
 
 `bun run dev` does the setup a new app needs. The first time, it writes
 `.dev.vars` with a new secret for signing in, and each time it applies any new

@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, writeFileSync } from 'node:fs'
 
-import { nameApp } from './app-name'
 import {
   DIRECT_VITE_PORT,
   DIRECT_WORKER_PORT,
@@ -16,6 +15,8 @@ import {
 /** How the paired development servers listen and how browsers reach them. */
 export interface DevSession {
   readonly mode: 'portless' | 'direct'
+  /** The portless route Vite runs under, beside the Worker's. */
+  readonly viteRouteName: string
   readonly workerPort: number
   readonly workerOrigin: URL
   readonly viteOrigin: URL
@@ -58,11 +59,13 @@ const resolvePortlessUrl: PortlessUrlResolver = (routeName) =>
  */
 export function readDevSession(
   environment: PortlessProcessEnvironment,
-  resolveUrl: PortlessUrlResolver = resolvePortlessUrl
+  resolveUrl: PortlessUrlResolver = resolvePortlessUrl,
+  viteRouteName: string = VITE_ROUTE_NAME
 ): DevSession {
   if (environment.PORTLESS_URL === undefined) {
     return {
       mode: 'direct',
+      viteRouteName,
       workerPort: DIRECT_WORKER_PORT,
       workerOrigin: new URL(`http://localhost:${DIRECT_WORKER_PORT}`),
       viteOrigin: new URL(`http://localhost:${DIRECT_VITE_PORT}`),
@@ -71,9 +74,10 @@ export function readDevSession(
 
   return {
     mode: 'portless',
+    viteRouteName,
     workerPort: readPortlessPort(environment.PORT),
     workerOrigin: readDevOrigin('PORTLESS_URL', environment.PORTLESS_URL),
-    viteOrigin: readDevOrigin(`portless get ${VITE_ROUTE_NAME}`, resolveUrl(VITE_ROUTE_NAME)),
+    viteOrigin: readDevOrigin(`portless get ${viteRouteName}`, resolveUrl(viteRouteName)),
   }
 }
 
@@ -95,7 +99,7 @@ export function createDevCommands(
 ): ReadonlyArray<{ readonly name: string; readonly command: string }> {
   const vite =
     session.mode === 'portless'
-      ? `portless run --name ${VITE_ROUTE_NAME} vite`
+      ? `portless run --name ${session.viteRouteName} vite`
       : `vite --port ${DIRECT_VITE_PORT} --strictPort`
   const worker = [
     'wrangler dev',
@@ -185,7 +189,6 @@ async function runDevelopmentServers(): Promise<number> {
     return 1
   }
 
-  nameApp()
   if (ensureDevVars()) console.log('Wrote .dev.vars with a new secret for signing in locally.')
   try {
     applyLocalMigrations()

@@ -36,7 +36,7 @@ export function readDatabaseName(config: string): string | undefined {
   return /"database_name":\s*"([^"]+)"/.exec(config)?.[1]
 }
 
-/** Names wrangler.jsonc after the app, once `bun create` has named the package. */
+/** Names wrangler.jsonc after the app before anything reaches Cloudflare: cloudflare:setup and deploy run it. */
 export function nameApp(path = 'wrangler.jsonc'): string | undefined {
   const name = cloudflareName(packageJson.name)
   if (name === TEMPLATE_NAME) return undefined

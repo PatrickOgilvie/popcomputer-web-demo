@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
 
 import { cloudflareName, nameWranglerConfig, readDatabaseName, TEMPLATE_NAME } from './app-name'
 
-const config = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
+// The template's names as wrangler.jsonc ships them, whatever this app is called.
+const config = `{
+  "name": "${TEMPLATE_NAME}",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "${TEMPLATE_NAME}-db", "migrations_dir": "migrations" }
+  ],
+  "ratelimits": [{ "name": "SIGN_IN_LIMITER", "namespace_id": "1001" }]
+}`
 
 describe('app name', () => {
   test('makes a Cloudflare name from the package name bun create chose', () => {
@@ -19,7 +25,7 @@ describe('app name', () => {
 
     expect(named).toContain('"name": "my-app"')
     expect(readDatabaseName(named)).toBe('my-app-db')
-    expect(named).toContain('"binding": "DB"')
+    expect(named).toContain('"name": "SIGN_IN_LIMITER"')
   })
 
   test('keeps names the app already chose', () => {
