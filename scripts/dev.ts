@@ -1,7 +1,8 @@
 import concurrently from 'concurrently'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { Writable } from 'node:stream'
 
 import {
   DIRECT_VITE_PORT,
@@ -160,14 +161,29 @@ export function createDevVars(secret: string): string {
   ].join('\n')
 }
 
+/** The placeholder `.dev.vars.example` ships with, which secures nothing. */
+const PLACEHOLDER_SECRET = /^BETTER_AUTH_SECRET=replace-me.*$/m
+
 /**
  * Writes `.dev.vars` with a fresh Better Auth secret when it is missing, so a
- * new app signs people in without editing anything. An existing file is kept.
+ * new app signs people in without editing anything, and replaces the example's
+ * placeholder if someone copied it. Any other file is kept.
  */
-export function ensureDevVars(path = '.dev.vars'): boolean {
-  if (existsSync(path)) return false
-  writeFileSync(path, createDevVars(randomBytes(32).toString('base64')), { mode: 0o600 })
-  return true
+export function ensureDevVars(path = '.dev.vars'): 'written' | 'replaced' | 'kept' {
+  const secret = () => randomBytes(32).toString('base64')
+  if (!existsSync(path)) {
+    writeFileSync(path, createDevVars(secret()), { mode: 0o600 })
+    return 'written'
+  }
+  const vars = readFileSync(path, 'utf8')
+  if (!PLACEHOLDER_SECRET.test(vars)) return 'kept'
+  writeFileSync(path, vars.replace(PLACEHOLDER_SECRET, `BETTER_AUTH_SECRET=${secret()}`))
+  return 'replaced'
+}
+
+/** How many migrations wrangler's output says it applied: one ✅ for each. */
+export function countAppliedMigrations(output: string): number {
+  return output.match(/✅/g)?.length ?? 0
 }
 
 /**
@@ -179,7 +195,60 @@ function applyLocalMigrations(): void {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
   })
-  if (!output.includes('No migrations to apply')) console.log(output)
+  const applied = countAppliedMigrations(output)
+  if (applied > 0) console.log(`Applied ${applied} migration${applied === 1 ? '' : 's'} to the local database.`)
+}
+
+/** Lines of wrangler's notice that local crons don't run, which a person needn't act on. */
+const CRON_NOTICE_LINES = 6
+
+/**
+ * Rewrites the two servers' output for a person: it drops wrangler's notice
+ * that crons don't run locally, says where to open the app once the Worker is
+ * ready, and after Ctrl-C drops the servers' exit codes, which read like
+ * failures. The notice is skipped for at most a few lines, so a change to its
+ * wording never hides anything after it.
+ */
+export function createOutputFilter(
+  appOrigin: string,
+  stopping: () => boolean
+): (line: string) => ReadonlyArray<string> {
+  let cronNoticeLeft = 0
+  return (line) => {
+    if (line.includes('Scheduled Workers are not automatically triggered')) {
+      cronNoticeLeft = CRON_NOTICE_LINES
+      return []
+    }
+    if (cronNoticeLeft > 0) {
+      cronNoticeLeft = line.includes('test-cron-triggers-locally') ? 0 : cronNoticeLeft - 1
+      return []
+    }
+    if (stopping() && (line.includes('exited with code') || line.includes('Sending SIGTERM to other processes'))) {
+      return []
+    }
+    if (line.includes('Ready on http')) return [line, `Open ${appOrigin} in your browser.`]
+    return [line]
+  }
+}
+
+/** A stream that passes each whole line of output through the filter to stdout. */
+function filteredOutput(filter: (line: string) => ReadonlyArray<string>): Writable {
+  let partial = ''
+  const writeLines = (lines: ReadonlyArray<string>) => {
+    for (const line of lines) for (const shown of filter(line)) process.stdout.write(`${shown}\n`)
+  }
+  return new Writable({
+    write(chunk: Buffer | string, _encoding, done) {
+      const lines = (partial + chunk.toString()).split('\n')
+      partial = lines.pop() ?? ''
+      writeLines(lines)
+      done()
+    },
+    final(done) {
+      if (partial !== '') writeLines([partial])
+      done()
+    },
+  })
 }
 
 async function runDevelopmentServers(): Promise<number> {
@@ -189,11 +258,14 @@ async function runDevelopmentServers(): Promise<number> {
     return 1
   }
 
-  if (ensureDevVars()) console.log('Wrote .dev.vars with a new secret for signing in locally.')
+  const devVars = ensureDevVars()
+  if (devVars === 'written') console.log('Wrote .dev.vars with a new secret for signing in locally.')
+  if (devVars === 'replaced') console.log("Replaced .dev.vars's placeholder secret with a new one.")
   try {
     applyLocalMigrations()
-  } catch {
-    console.error('Could not apply the local database migrations; wrangler said why above.')
+  } catch (cause: unknown) {
+    if (typeof cause === 'object' && cause !== null && 'stdout' in cause) console.error(String(cause.stdout))
+    console.error('Could not apply the local database migrations; wrangler says why above.')
     return 1
   }
 
@@ -215,10 +287,19 @@ async function runDevelopmentServers(): Promise<number> {
 
   console.log(`App: ${session.workerOrigin.origin} · Vite: ${session.viteOrigin.origin}`)
 
+  // portless passes Ctrl-C on as SIGINT; the servers stopping after it is no failure.
+  let stopping = false
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => {
+      stopping = true
+    })
+  }
+
   const { result } = concurrently([...createDevCommands(session)], {
     killOthersOn: ['failure', 'success'],
     prefix: 'name',
     prefixColors: ['magenta', 'cyan'],
+    outputStream: filteredOutput(createOutputFilter(session.workerOrigin.origin, () => stopping)),
   })
 
   try {

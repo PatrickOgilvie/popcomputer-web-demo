@@ -12,5 +12,6 @@ process.on('SIGINT', () => {
 
 const servers = spawn('portless', ['run', 'bun', 'scripts/dev.ts'], { stdio: 'inherit' })
 servers.on('exit', (code) => {
+  if (interrupted) console.log('Stopped.')
   process.exit(interrupted ? 0 : (code ?? 1))
 })

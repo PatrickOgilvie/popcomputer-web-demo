@@ -23,11 +23,12 @@ Each is declared once, and everything else derives from it:
 
 1. Declare its path in `src/paths.ts`.
 2. Declare its props in `src/pages.ts`.
-3. Write its action in `src/actions/`, and register it in `src/routes.ts`
+3. Declare its form's fields, if it has a form, in `src/forms.ts`.
+4. Write its action in `src/actions/`, and register it in `src/routes.ts`
    (behind `RequireAuthLayer` when it needs a signed-in member).
-4. Write the component in `src/pages/`, typed `WebPage<'Name'>`, and add it
+5. Write the component in `src/pages/`, typed `WebPage<'Name'>`, and add it
    to `components` in `src/main.tsx`; a page without one is a type error.
-5. Test it in `test/` through the app, as the tests there do.
+6. Test it in `test/` through the app, as the tests there do.
 
 A route that reads a record names it in its path (`/projects/{project}`)
 and reads it with `bound('project')`, after `authorize()`; add the table to
@@ -36,7 +37,8 @@ and reads it with `bound('project')`, after `authorize()`; add the table to
 ## Changing the database
 
 Edit `src/schema.ts`, then run `bun run db:generate` for a new migration in
-`migrations/`, and `bun run db:migrate:local` to apply it locally. Never edit
+`migrations/`, and `bun run db:migrate:local` to apply it locally; restarting
+`bun run dev` applies it too, since it applies new migrations as it starts. Never edit
 a migration that has been applied. Tests migrate each test's own D1 database
 from `migrations/`.
 

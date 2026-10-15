@@ -5,7 +5,9 @@ import { join } from 'node:path'
 
 import { InvalidDevOrigin, readViteDevServerConfiguration } from './dev-environment'
 import {
+  countAppliedMigrations,
   createDevCommands,
+  createOutputFilter,
   createDevServerEnvironment,
   createDevVars,
   ensureDevVars,
@@ -169,7 +171,7 @@ describe('first run', () => {
   test('writes .dev.vars with a fresh secret, readable only by its owner', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
 
-    expect(ensureDevVars(path)).toBe(true)
+    expect(ensureDevVars(path)).toBe('written')
     const secret = /^BETTER_AUTH_SECRET=(.+)$/m.exec(readFileSync(path, 'utf8'))?.[1]
     expect(Buffer.from(secret ?? '', 'base64')).toHaveLength(32)
     expect(statSync(path).mode & 0o777).toBe(0o600)
@@ -179,7 +181,7 @@ describe('first run', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
     writeFileSync(path, createDevVars('mine'))
 
-    expect(ensureDevVars(path)).toBe(false)
+    expect(ensureDevVars(path)).toBe('kept')
     expect(readFileSync(path, 'utf8')).toContain('BETTER_AUTH_SECRET=mine')
   })
 })
@@ -199,5 +201,61 @@ describe('Node.js for wrangler', () => {
 
   test('names an older Node.js', () => {
     expect(nodeProblem('20.5.1')).toContain('this computer has 20.5.1')
+  })
+})
+
+describe('first run, copied example', () => {
+  test("replaces the example's placeholder secret", () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
+    writeFileSync(path, '# copied\nBETTER_AUTH_SECRET=replace-me-with-the-output-of-openssl-rand-base64-32\n')
+
+    expect(ensureDevVars(path)).toBe('replaced')
+    const vars = readFileSync(path, 'utf8')
+    expect(vars).toStartWith('# copied\n')
+    expect(vars).not.toContain('replace-me')
+  })
+})
+
+describe('local migrations', () => {
+  test("counts the migrations wrangler's table marks applied", () => {
+    expect(countAppliedMigrations('│ 0000_initial.sql │ ✅     │\n│ 0001_links.sql │ ✅     │')).toBe(2)
+    expect(countAppliedMigrations('✅ No migrations to apply!'.replace('✅ ', ''))).toBe(0)
+  })
+})
+
+describe('server output', () => {
+  const app = 'https://reading-list.localhost'
+
+  test("drops wrangler's notice that crons don't run locally", () => {
+    const filter = createOutputFilter(app, () => false)
+    const shown = [
+      '[worker] ▲ [WARNING] Scheduled Workers are not automatically triggered during local development.',
+      '[worker] ',
+      '[worker]   To manually trigger a scheduled event, run:',
+      '[worker]     curl "http://127.0.0.1:4115/cdn-cgi/local/scheduled"',
+      '[worker]   For more details, see https://developers.cloudflare.com/workers/configuration/cron-triggers/#test-cron-triggers-locally',
+      '[worker] Ready on http://127.0.0.1:4115',
+    ].flatMap(filter)
+
+    expect(shown).toEqual(['[worker] Ready on http://127.0.0.1:4115', `Open ${app} in your browser.`])
+  })
+
+  test('never hides more than the notice, whatever its wording', () => {
+    const filter = createOutputFilter(app, () => false)
+    filter('[worker] ▲ [WARNING] Scheduled Workers are not automatically triggered during local development.')
+    const later = Array.from({ length: 10 }, (_, line) => `[worker] line ${line}`).flatMap(filter)
+
+    expect(later).toHaveLength(4)
+  })
+
+  test("drops the servers' exit codes only after Ctrl-C", () => {
+    let stopping = false
+    const filter = createOutputFilter(app, () => stopping)
+    const exited = '[vite] portless run --name vite.reading-list vite exited with code 130'
+
+    expect(filter(exited)).toEqual([exited])
+    stopping = true
+    expect(filter(exited)).toEqual([])
+    expect(filter('--> Sending SIGTERM to other processes..')).toEqual([])
   })
 })

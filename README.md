@@ -105,8 +105,9 @@ test/           tests through the app, each on a D1 database of its own
 
 You need [Node.js](https://nodejs.org) 24 or later, [Bun](https://bun.sh) and
 [portless](https://github.com/vercel-labs/portless) running in the background.
-Wrangler, Vite and everything else come with each app. Portless needs Node.js
-24; Wrangler runs on 22, and `bun run dev` stops with directions on anything
+Wrangler, Vite and everything else come with each app. Portless is built for
+Node.js 24, and its `portless doctor` check fails below it, though it runs on
+22; Wrangler needs 22, and `bun run dev` stops with directions on anything
 older.
 
 1. Install Node.js with the LTS installer from <https://nodejs.org>. It asks
@@ -148,7 +149,12 @@ Cloudflare take the same name when you first set it up there.
 migrations to the local D1 database. Then it runs the Worker and Vite together
 through portless, which gives each app a name instead of a port, so an edit
 shows in the browser as you save it. If Node.js is missing, it says so and
-stops. Stop the app with Ctrl-C.
+stops. Once the Worker is ready it says which address to open. Stop the app
+with Ctrl-C.
+
+Until you first set the app up on Cloudflare, Wrangler's output shows the
+template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
+gives the Worker and its database the app's name.
 
 Without the portless service, `bun run dev` asks for your password the first
 time it runs, and again after a restart. `PORTLESS=0 bun run dev` skips
