@@ -161,10 +161,10 @@ Explorer, at `/cdn-cgi/local/explorer` on the app's address: Cloudflare's page
 for looking at the local database, KV and traces, with an API for agents at
 `/cdn-cgi/local/explorer/api`. The app itself is at its address's other paths.
 
-Until you first set the app up on Cloudflare, `wrangler.jsonc` holds the
-template's names, so a build's `dist/popcomputer_web_demo` folder and
+Until you first deploy the app, `wrangler.jsonc` holds the template's names,
+so a build's `dist/popcomputer_web_demo` folder and
 `bun run db:migrate:local`'s `popcomputer-web-demo-db` show them;
-`bun run cloudflare:setup` gives the Worker and its database the app's name.
+`bun run deploy` gives the Worker and its database the app's name.
 `bun run dev` already uses the app's name.
 
 If the address shows portless's "404 - Not Found" page, the app isn't running:
@@ -233,7 +233,8 @@ bun run db:migrate:local
 ```
 
 `bun run dev` also applies new migrations when it starts, so restarting it
-does the same.
+does the same. `bun run deploy` won't deploy a change to `src/schema.ts`
+until there's a migration for it.
 
 Don't edit a migration that has been applied anywhere; add another.
 
@@ -244,25 +245,50 @@ creates the D1 database and asks for `BETTER_AUTH_SECRET`: give it a new value
 from `openssl rand -base64 32`, not the placeholder. Its deploy applies the
 migrations, then deploys the Worker.
 
-**By hand**, the first time, sign in to Cloudflare. This opens your browser
-to allow Wrangler into your account; a free account is enough:
+**From your computer**, the first time, sign in to Cloudflare. This opens your
+browser to allow Wrangler into your account; a free account is enough:
 
 ```bash
 bun run cloudflare:login
 ```
 
-Then create the app's D1 database, which writes its id into `wrangler.jsonc`,
-and upload a new secret for signing in:
-
-```bash
-bun run cloudflare:setup
-```
-
-Then build, migrate and deploy, now and after every change:
+Then deploy, now and after every change:
 
 ```bash
 bun run deploy
 ```
+
+It's safe to run again at any time. Each run:
+
+1. Names the Worker and its database after the app, in `wrangler.jsonc`.
+2. Stops if `src/schema.ts` has a change with no migration, and says to run
+   `bun run db:generate`.
+3. Stops if Wrangler isn't signed in, and says to run
+   `bun run cloudflare:login`.
+4. Creates the app's D1 database the first time, and writes its id into
+   `wrangler.jsonc`; commit that change. If the id is lost, the next run finds
+   the database by its name instead of making another.
+5. Uploads a new `BETTER_AUTH_SECRET` the first time. It never replaces one,
+   so a redeploy keeps everyone signed in.
+6. Builds the app, applies new migrations to the D1 database, deploys the
+   Worker and prints its `workers.dev` address.
+
+To watch the deployed app's requests, errors and `console.log` lines as they
+happen, until you stop it with Ctrl-C:
+
+```bash
+bun run logs
+```
+
+To go back to the deploy before the current one:
+
+```bash
+bun run rollback
+```
+
+In a terminal, it asks you to confirm first. A rollback puts back the Worker's
+code, not the database: migrations stay applied, so the older code has to work
+with the newer tables.
 
 Better Auth takes its origin from each request, so the Worker works on
 `workers.dev` and on any custom domain routed to it, with nothing more to

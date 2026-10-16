@@ -36,7 +36,7 @@ export function readDatabaseName(config: string): string | undefined {
   return /"database_name":\s*"([^"]+)"/.exec(config)?.[1]
 }
 
-/** Names wrangler.jsonc after the app before anything reaches Cloudflare: cloudflare:setup and deploy run it. */
+/** Names wrangler.jsonc after the app before anything reaches Cloudflare: `bun run deploy` runs it first. */
 export function nameApp(path = 'wrangler.jsonc'): string | undefined {
   const name = cloudflareName(packageJson.name)
   if (name === TEMPLATE_NAME) return undefined
@@ -47,9 +47,4 @@ export function nameApp(path = 'wrangler.jsonc'): string | undefined {
 
   writeFileSync(path, named)
   return name
-}
-
-if (import.meta.main) {
-  const name = nameApp()
-  if (name !== undefined) console.log(`Named the Worker ${name} and its database ${name}-db in wrangler.jsonc.`)
 }

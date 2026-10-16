@@ -15,10 +15,9 @@
     "db:migrate": "wrangler d1 migrations apply DB --remote -c wrangler.jsonc",
     "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.jsonc",
     "cloudflare:login": "wrangler login",
-    "cloudflare:setup": "bun run cloudflare:database && bun run cloudflare:secret",
-    "cloudflare:database": "bun scripts/cloudflare-database.ts",
-    "cloudflare:secret": "bun scripts/app-name.ts && openssl rand -base64 32 | wrangler secret put BETTER_AUTH_SECRET -c wrangler.jsonc",
-    "deploy": "bun scripts/app-name.ts && bun run build && bun run db:migrate && wrangler deploy"
+    "deploy": "bun scripts/deploy.ts",
+    "logs": "wrangler tail -c wrangler.jsonc",
+    "rollback": "wrangler rollback -c wrangler.jsonc"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

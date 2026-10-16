@@ -43,6 +43,20 @@ applies new migrations as it starts. Never edit
 a migration that has been applied. Tests migrate each test's own D1 database
 from `migrations/`.
 
+## Deploying
+
+Deploy only when asked, with `bun run deploy`: it does everything, and is
+safe to run again. It stops, saying why, when `src/schema.ts` has a change
+with no migration (run `bun run db:generate`) or when Wrangler isn't signed in
+to Cloudflare (`bun run cloudflare:login` opens the user's browser to allow
+it). It ends by printing the app's address.
+
+To see what the deployed app is doing, run `bun run logs` in the background:
+it prints each request, its `console.log` lines and any error, as JSON without
+a terminal, until stopped. To undo a deploy, `bun run rollback` puts the one
+before back, without asking when there's no terminal; the database keeps its
+migrations.
+
 ## Before finishing
 
 Run `bun run check`: the type check, the framework's lint rules and the
