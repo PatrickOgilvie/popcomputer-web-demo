@@ -1,0 +1,26 @@
+# Runs bun run check, the type check, the framework's lint rules and the
+# tests, on each push to main and each pull request.
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # Wrangler, which builds and tests the Worker, needs Node.js 22 or later.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      # Its postinstall builds the app, whose client manifest the type check reads.
+      - run: bun install --frozen-lockfile
+      - run: bun run check

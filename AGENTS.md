@@ -43,19 +43,49 @@ applies new migrations as it starts. Never edit
 a migration that has been applied. Tests migrate each test's own D1 database
 from `migrations/`.
 
+`bun run db:seed` deletes the local database's data, migrates a new one and
+runs `src/seed.ts`, whose member signs in as `ada@example.com` with the
+password `at least twelve characters`; keep the seed working when the schema
+changes, as `bun run check` type-checks it. `bun run db:reset` empties the
+local database. Both delete data, so without a terminal they stop and ask
+for `--yes`: pass it only when the user asked for the reset, and run
+`bun run stop` first if `bun run dev` is running.
+
+`bun run db:execute "SQL"` runs one statement on the local database and
+prints its result as JSON. With `--remote` it runs on the live app's
+database on Cloudflare; a statement that could change data there stops and
+asks for `--yes`, which you pass only once the user has said to run that
+statement on the live data.
+
 ## Deploying
 
 Deploy only when asked, with `bun run deploy`: it does everything, and is
 safe to run again. It stops, saying why, when `src/schema.ts` has a change
 with no migration (run `bun run db:generate`) or when Wrangler isn't signed in
 to Cloudflare (`bun run cloudflare:login` opens the user's browser to allow
-it). It ends by printing the app's address.
+it). It uploads the new version beside the live one, and makes it live only
+once its `/login` answers 200 at the version's own address; it ends by
+printing the app's address. When the check fails, the live version is
+unchanged and the output names the address and what it answered: fetch
+that address to see the error, fix it, and deploy again.
 
-To see what the deployed app is doing, run `bun run logs` in the background:
+`bun run preview`, also only when asked, uploads a version that takes no
+traffic and prints its address to share; it runs on the live database and
+secrets, so say so to whoever it's shared with. `bun run status` says which version is live and
+which migrations each database hasn't had. Each prints a sentence naming
+the next command when it stops, and exits 1.
+
+To see what the live app is doing, run `bun run logs` in the background:
 it prints each request, its `console.log` lines and any error, as JSON without
-a terminal, until stopped. To undo a deploy, `bun run rollback` puts the one
-before back, without asking when there's no terminal; the database keeps its
-migrations.
+a terminal, until stopped; requests to a preview's address don't show there.
+To undo a deploy, `bun run rollback` puts the one before back, without asking
+when there's no terminal; the database keeps its migrations.
+
+`.github/workflows/check.yml` runs `bun run check` on GitHub, and
+`.github/workflows/deploy.yml` runs `bun run deploy` for each push to `main`
+once the repository has the `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` secrets; the README's "Deploying from GitHub" says
+how the user adds them.
 
 ## Before finishing
 

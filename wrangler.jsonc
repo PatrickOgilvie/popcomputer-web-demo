@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   // The client bundle `bun run build` writes; the Worker answers everything else.
   "assets": { "directory": "dist" },
+  // Each uploaded version answers at an address of its own: bun run deploy
+  // checks a new one there before it goes live, and bun run preview shares it.
+  "preview_urls": true,
   "d1_databases": [
     {
       "binding": "DB",

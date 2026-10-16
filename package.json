@@ -14,8 +14,13 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --remote -c wrangler.jsonc",
     "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.jsonc",
+    "db:seed": "bun scripts/database.ts seed",
+    "db:reset": "bun scripts/database.ts reset",
+    "db:execute": "bun scripts/database.ts execute",
     "cloudflare:login": "wrangler login",
     "deploy": "bun scripts/deploy.ts",
+    "preview": "bun scripts/preview.ts",
+    "status": "bun scripts/status.ts",
     "logs": "wrangler tail -c wrangler.jsonc",
     "rollback": "wrangler rollback -c wrangler.jsonc"
   },

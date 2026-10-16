@@ -36,7 +36,8 @@ export const updateProject = action(
 ## Contents
 
 - [What it does](#what-it-does) · [How it's built](#how-its-built) · [Running it locally](#running-it-locally) · [Checks](#checks)
-- [Changing the database](#changing-the-database) · [Deploying](#deploying) · [Upgrading](#upgrading) · [Working with coding agents](#working-with-coding-agents)
+- [Changing the database](#changing-the-database) · [The local database's data](#the-local-databases-data) · [Deploying](#deploying) · [Deploying from GitHub](#deploying-from-github)
+- [Upgrading](#upgrading) · [Working with coding agents](#working-with-coding-agents)
 
 ## What it does
 
@@ -218,7 +219,8 @@ bun run check
 `check` runs the type check, the framework's lint rules (`oxlint`) and the
 tests. The tests send requests through the app, signing in through the real
 registration form, each against a D1 database of its own in Miniflare, in
-process.
+process. On GitHub, `.github/workflows/check.yml` runs it for each push to
+`main` and each pull request.
 
 ## Changing the database
 
@@ -237,6 +239,56 @@ does the same. `bun run deploy` won't deploy a change to `src/schema.ts`
 until there's a migration for it.
 
 Don't edit a migration that has been applied anywhere; add another.
+
+## The local database's data
+
+To start the local database again with something in it:
+
+```bash
+bun run db:seed
+```
+
+It deletes everything in the local database, applies the migrations to a
+new one, then runs `src/seed.ts`. The template's seed creates a member to
+sign in as, `ada@example.com` with the password `at least twelve characters`,
+with a private project and a public one. A seed exports a function that
+takes the database and the Worker's bindings, and inserts with Drizzle, so
+`bun run check` reports a seed a schema change has broken:
+
+```ts
+// src/seed.ts
+export async function seed(db: Database, env: Bindings): Promise<void> {
+  // Through Better Auth, as the sign-up form does, so the password signs in.
+  const auth = createAuth({ db, secret: env.BETTER_AUTH_SECRET, baseURL: 'http://localhost' })
+  const { user } = await auth.api.signUpEmail({ body: { ...seedMember } })
+
+  await db.insert(projects).values([{ userId: user.id, name: 'Apollo' }])
+}
+```
+
+`bun run db:seed --file seeds/demo.sql` runs a SQL file instead, or another
+module that exports a seed. To empty the local database without seeding it:
+
+```bash
+bun run db:reset
+```
+
+Both ask before deleting anything. Without a terminal to ask in, as when a
+coding agent runs them, they stop and say to add `--yes`. Neither runs while
+`bun run dev` has the database open: stop it with `bun run stop` first. Only
+the local database is ever reset; the one on Cloudflare keeps its data.
+
+To run one SQL statement on the local database, and see what it returns:
+
+```bash
+bun run db:execute "SELECT email, created_at FROM user"
+```
+
+With `--remote`, it runs on the database on Cloudflare, the live app's.
+A statement that only reads, such as a `SELECT`, runs straight away; one that
+could change data asks first, since `bun run rollback` won't undo it, and
+without a terminal it wants `--yes`. Put the statement in quotes, so the
+shell passes it whole.
 
 ## Deploying
 
@@ -270,10 +322,55 @@ It's safe to run again at any time. Each run:
    the database by its name instead of making another.
 5. Uploads a new `BETTER_AUTH_SECRET` the first time. It never replaces one,
    so a redeploy keeps everyone signed in.
-6. Builds the app, applies new migrations to the D1 database, deploys the
-   Worker and prints its `workers.dev` address.
+6. Builds the app and applies new migrations to the D1 database.
+7. Uploads the build as a new version of the Worker, beside the live one,
+   and checks it answers at its own address, its Version URL: `/login`,
+   a page that needs no sign-in, has 30 seconds to answer. Only then does the
+   new version go live, with the cron schedule and `workers.dev` settings in
+   `wrangler.jsonc`, and the deploy prints the app's address.
 
-To watch the deployed app's requests, errors and `console.log` lines as they
+When the new version doesn't answer, the live one stays as it was. The
+deploy says what the new version answered, and at which address, then
+stops; open that address to see the problem, fix it, and deploy again.
+Migrations the run applied stay applied, as after a rollback, so the live
+code has to work with the newer tables.
+
+The first deploy has no live version to keep, so it goes live straight away,
+as `wrangler deploy` does, and is checked at its `workers.dev` address once
+it's live. So is a version Cloudflare gives no Version URL. `"preview_urls":
+true` in `wrangler.jsonc` keeps them on, and the first deploy turns them on.
+Version URLs are public, as the `workers.dev` address is; if
+[Cloudflare Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
+asks visitors to sign in there, the check can't see the app, so the deploy
+goes live without it and says so.
+
+To share a change for feedback before it goes live:
+
+```bash
+bun run preview
+```
+
+It builds the app, uploads it as a version that takes none of the live
+app's requests, checks it answers, and prints its address, such as
+`https://1a2b3c4d-my-app.my-subdomain.workers.dev`. `bun run deploy` makes
+the same code live. A preview runs on the live app's database and secrets:
+what someone does there, signing up or editing a project, they do to the
+live app's data. It never applies migrations, so it says when the database
+on Cloudflare hasn't had one yet: pages that need it fail on the preview
+until a deploy applies it. The app has to be deployed once first.
+
+To see what's live, and whether each database has every migration:
+
+```bash
+bun run status
+```
+
+It says which version is live, when it was deployed and by whom, and names
+any migration the database on Cloudflare or the local one hasn't had yet.
+Without a Cloudflare login, it says how the local database is, then how to
+sign in.
+
+To watch the live app's requests, errors and `console.log` lines as they
 happen, until you stop it with Ctrl-C:
 
 ```bash
@@ -288,11 +385,40 @@ bun run rollback
 
 In a terminal, it asks you to confirm first. A rollback puts back the Worker's
 code, not the database: migrations stay applied, so the older code has to work
-with the newer tables.
+with the newer tables. Requests to a Version URL, from `bun run preview` or a
+deploy's check, don't show in `bun run logs`.
 
 Better Auth takes its origin from each request, so the Worker works on
-`workers.dev` and on any custom domain routed to it, with nothing more to
-configure.
+`workers.dev`, at its Version URLs and on any custom domain routed to it,
+with nothing more to configure.
+
+## Deploying from GitHub
+
+`.github/workflows/deploy.yml` runs `bun run check`, then `bun run deploy`,
+for each push to `main`, once the repository has two secrets for it. Until
+then it skips the deploy and the run still passes, with a note saying the
+secrets are missing. A deploy from GitHub works as one from your computer:
+a new version goes live only once it answers, and a run that stops says why
+in its log. It deploys to the Worker and database named after the app, as a
+deploy from your computer does, and creates them if nothing has been deployed.
+
+1. Create a Cloudflare API token. On the dashboard's
+   [Account API tokens](https://dash.cloudflare.com/?to=/:account/api-tokens)
+   page, select **Create Token**, and start from the **Edit Cloudflare
+   Workers** template. Add the permission **Account**, **D1**, **Edit**,
+   which the template lacks and the migrations need, and limit the token to
+   the account the app deploys to. Create it, and copy the token.
+2. Copy your account ID, the 32 characters after `dash.cloudflare.com/` in
+   the dashboard's address once you're signed in. Cloudflare's
+   [Find account and zone IDs](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)
+   shows where else it appears.
+3. In the repository on GitHub, open **Settings**, then **Secrets and
+   variables**, then **Actions**, and add two repository secrets:
+   `CLOUDFLARE_API_TOKEN`, holding the token, and `CLOUDFLARE_ACCOUNT_ID`,
+   holding the account ID.
+
+The next push to `main` deploys it. To deploy without pushing, run the
+Deploy workflow from the repository's **Actions** tab.
 
 ## Upgrading
 

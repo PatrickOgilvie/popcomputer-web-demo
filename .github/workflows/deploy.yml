@@ -1,0 +1,55 @@
+# Deploys main with bun run deploy, after bun run check, once the repository
+# has the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets. Without
+# them the deploy job is skipped, and the run still passes. The README's
+# "Deploying from GitHub" says how to add them.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time: a newer push waits for the deploy before it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.secrets.outputs.configured }}
+    steps:
+      - id: secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Not deployed::This repository has no CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets, so main wasn't deployed. The README's \"Deploying from GitHub\" says how to add them."
+          fi
+
+  deploy:
+    needs: secrets
+    if: needs.secrets.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      # Only this step has the token: not the install, whose packages run scripts of their own.
+      - run: bun run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

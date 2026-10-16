@@ -1,10 +1,22 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import drizzleConfig from '../drizzle.config'
 import { findDatabaseId, PLACEHOLDER_DATABASE_ID, readDatabaseId, writeDatabaseId } from './cloudflare-database'
-import { AUTH_SECRET, checkSchema, readDeployUrl, readLogin, readSchemaCheck, readSecret } from './deploy'
+import { readEvents } from './command'
+import {
+  AUTH_SECRET,
+  checkSchema,
+  deployDirectly,
+  deployStaged,
+  loginAdvice,
+  readDeployUrl,
+  readLogin,
+  readSchemaCheck,
+  readSecret,
+} from './deploy'
+import { fakeWrangler } from './fake-wrangler'
 
 describe('Cloudflare login', () => {
   test('reads a login from wrangler whoami --json', () => {
@@ -29,6 +41,13 @@ describe('Cloudflare login', () => {
   test('reads neither when wrangler failed some other way', () => {
     expect(readLogin('')).toBeUndefined()
     expect(readLogin('✘ [ERROR] A request to the Cloudflare API failed.')).toBeUndefined()
+  })
+
+  test('says to sign in through the browser on a computer, and to set the token in CI', () => {
+    expect(loginAdvice('bun run status', false)).toContain('Run bun run cloudflare:login')
+    expect(loginAdvice('bun run status', false)).toEndWith('then run bun run status again.')
+    expect(loginAdvice('bun run deploy', true)).toContain('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID')
+    expect(loginAdvice('bun run deploy', true)).not.toContain('cloudflare:login')
   })
 })
 
@@ -87,7 +106,7 @@ describe('Better Auth secret', () => {
     expect(readSecret(listed('[]'), AUTH_SECRET)).toBe('missing')
   })
 
-  test("reads it missing before the first deploy, when there's no Worker yet", () => {
+  test("reads no Worker before the first deploy, when there's none to hold it yet", () => {
     const notFound = {
       status: 1,
       stdout: '',
@@ -99,7 +118,7 @@ describe('Better Auth secret', () => {
       ].join('\n'),
     }
 
-    expect(readSecret(notFound, AUTH_SECRET)).toBe('missing')
+    expect(readSecret(notFound, AUTH_SECRET)).toBe('no-worker')
   })
 
   test('reads neither when wrangler failed some other way', () => {
@@ -173,13 +192,170 @@ describe('deploy address', () => {
     ].join('\n')
 
   test('reads the workers.dev address among what the deploy serves', () => {
-    const url = readDeployUrl(output(['https://book-club.ada.workers.dev', 'schedule: 0 3 * * *']))
+    const url = readDeployUrl(readEvents(output(['https://book-club.ada.workers.dev', 'schedule: 0 3 * * *'])))
 
     expect(url).toBe('https://book-club.ada.workers.dev')
   })
 
   test('reads none when the Worker serves no workers.dev address', () => {
-    expect(readDeployUrl(output(['books.example.com (custom domain)', 'schedule: 0 3 * * *']))).toBeUndefined()
-    expect(readDeployUrl('')).toBeUndefined()
+    const events = readEvents(output(['books.example.com (custom domain)', 'schedule: 0 3 * * *']))
+
+    expect(readDeployUrl(events)).toBeUndefined()
+    expect(readDeployUrl(readEvents(''))).toBeUndefined()
+  })
+})
+
+describe('staged deploy', () => {
+  const versionId = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+  const quick = { attempts: 2, intervalMs: 0 }
+
+  /** A stand-in for the new version's Version URL, answering each request with `status`. */
+  function versionAt(status: number) {
+    const requests: Array<string> = []
+    const server = Bun.serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      fetch(request) {
+        requests.push(new URL(request.url).pathname)
+        return new Response('page', { status })
+      },
+    })
+    return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) }
+  }
+
+  const uploaded = (previewUrl?: string) => ({
+    events: [{ type: 'version-upload', version: 1, worker_name: 'book-club', version_id: versionId, preview_url: previewUrl ?? null }],
+  })
+
+  /** Runs `run` with the fake wrangler and console.log quiet, then puts both back. */
+  async function withWrangler<T>(plan: Parameters<typeof fakeWrangler>[0], run: (wrangler: ReturnType<typeof fakeWrangler>) => Promise<T>) {
+    const wrangler = fakeWrangler(plan)
+    const log = spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      return await run(wrangler)
+    } finally {
+      log.mockRestore()
+      wrangler.restore()
+    }
+  }
+
+  test('makes the new version live once it answers at its Version URL, then applies the triggers', async () => {
+    const version = versionAt(200)
+    try {
+      const calls = await withWrangler({ 'versions upload': uploaded(version.url) }, async (wrangler) => {
+        expect(await deployStaged(quick)).toBeUndefined()
+        return wrangler.calls()
+      })
+
+      expect(version.requests).toEqual(['/login'])
+      expect(calls).toEqual([
+        ['versions', 'upload', '--message', 'bun run deploy'],
+        ['versions', 'deploy', `${versionId}@100%`, '--yes', '--message', 'bun run deploy'],
+        ['triggers', 'deploy'],
+      ])
+    } finally {
+      version.stop()
+    }
+  })
+
+  test("leaves the live version alone when the new one doesn't answer, and says why", async () => {
+    const version = versionAt(500)
+    try {
+      const { problem, calls } = await withWrangler({ 'versions upload': uploaded(version.url) }, async (wrangler) => ({
+        problem: await deployStaged(quick),
+        calls: wrangler.calls(),
+      }))
+
+      expect(problem).toContain(`didn't answer at ${version.url}/login: it answered with status 500`)
+      expect(problem).toContain("It isn't live: the live version is unchanged.")
+      expect(problem).toContain('then run bun run deploy again')
+      expect(calls).toEqual([['versions', 'upload', '--message', 'bun run deploy']])
+    } finally {
+      version.stop()
+    }
+  })
+
+  test('goes live with wrangler deploy when the version has no Version URL to be checked at', async () => {
+    const calls = await withWrangler({ 'versions upload': uploaded(), deploy: { events: [] } }, async (wrangler) => {
+      expect(await deployStaged(quick)).toBeUndefined()
+      return wrangler.calls()
+    })
+
+    expect(calls).toEqual([
+      ['versions', 'upload', '--message', 'bun run deploy'],
+      ['deploy', '--message', 'bun run deploy'],
+    ])
+  })
+
+  test("checks the live address after wrangler deploy, and says what to do when it doesn't answer", async () => {
+    const asked: Array<string> = []
+    const check = {
+      attempts: 1,
+      fetch: async (url: string) => {
+        asked.push(url)
+        return new Response(null, { status: 503 })
+      },
+    }
+    const live = { type: 'deploy', version: 1, version_id: versionId, targets: ['https://book-club.ada.workers.dev', 'schedule: 0 3 * * *'] }
+    const problem = await withWrangler({ 'versions upload': uploaded(), deploy: { events: [live] } }, () =>
+      deployStaged(check)
+    )
+
+    expect(asked).toEqual(['https://book-club.ada.workers.dev/login'])
+    expect(problem).toContain("It's live, but https://book-club.ada.workers.dev/login didn't answer: it answered with status 503.")
+    expect(problem).toContain('bun run rollback')
+  })
+
+  test("doesn't suggest a rollback after a first deploy, which has nothing before it", async () => {
+    const check = { attempts: 1, fetch: async () => new Response(null, { status: 500 }) }
+    const live = { type: 'deploy', version: 1, version_id: versionId, targets: ['https://book-club.ada.workers.dev'] }
+    const problem = await withWrangler({ deploy: { events: [live] } }, () =>
+      deployDirectly("This is the app's first deploy.", { first: true, check })
+    )
+
+    expect(problem).toContain('run bun run logs while you open it')
+    expect(problem).not.toContain('rollback')
+  })
+
+  test('goes live with wrangler deploy when the Worker has no version to stage beside yet', async () => {
+    const plan = {
+      'versions upload': {
+        status: 1,
+        events: [
+          {
+            type: 'command-failed',
+            version: 1,
+            message: 'You cannot upload a new version of a Worker that does not yet exist. Please run the `deploy` command first.',
+          },
+        ],
+      },
+      deploy: { events: [] },
+    }
+    const calls = await withWrangler(plan, async (wrangler) => {
+      expect(await deployStaged(quick)).toBeUndefined()
+      return wrangler.calls()
+    })
+
+    expect(calls.at(-1)).toEqual(['deploy', '--message', 'bun run deploy'])
+  })
+
+  test('stops, with the live version unchanged, when the upload fails', async () => {
+    const plan = { 'versions upload': { status: 1, events: [{ type: 'command-failed', version: 1, message: 'Authentication error' }] } }
+    const problem = await withWrangler(plan, () => deployStaged(quick))
+
+    expect(problem).toBe('Could not upload the new version; wrangler says why above. The live version is unchanged.')
+  })
+
+  test("says the new version is live but its triggers aren't when triggers deploy fails", async () => {
+    const version = versionAt(200)
+    try {
+      const plan = { 'versions upload': uploaded(version.url), 'triggers deploy': { status: 1 } }
+      const problem = await withWrangler(plan, () => deployStaged(quick))
+
+      expect(problem).toContain('The new version 1a2b3c4d is live, but Cloudflare didn\'t take the cron schedule')
+      expect(problem).toContain('Run bun run deploy again')
+    } finally {
+      version.stop()
+    }
   })
 })
