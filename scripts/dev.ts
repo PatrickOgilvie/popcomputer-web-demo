@@ -209,12 +209,13 @@ const CRON_NOTICE_LINES = 6
 const EXPLORER_NOTICE_LINES = 20
 
 /**
- * Rewrites the two servers' output for a person: it drops wrangler's notice
- * that crons don't run locally, shortens its list of routes for AI agents to
- * the one address, says where to open the app once the Worker is
- * ready, and after Ctrl-C drops the servers' exit codes, which read like
- * failures. The notice is skipped for at most a few lines, so a change to its
- * wording never hides anything after it.
+ * Rewrites the two servers' output for a person, so it names one address to
+ * open: it drops Vite's portless banner and loopback address, empty lines and
+ * wrangler's notice that crons don't run locally, shortens its list of routes
+ * for AI agents to the one address, says where to open the app in place of
+ * the Worker's loopback address, and after Ctrl-C drops the servers' exit
+ * codes, which read like failures. A notice is skipped for at most a few
+ * lines, so a change to its wording never hides anything after it.
  */
 export function createOutputFilter(
   appOrigin: string,
@@ -244,7 +245,10 @@ export function createOutputFilter(
     if (stopping() && (line.includes('exited with code') || line.includes('Sending SIGTERM to other processes'))) {
       return []
     }
-    if (line.includes('Ready on http')) return [line, `Open ${appOrigin} in your browser.`]
+    const plain = line.replace(/\x1b\[[0-9;]*m/g, '')
+    if (/^\[(vite|worker)\]\s*$/.test(plain)) return []
+    if (/^\[vite\]\s*(portless$|-- |-> |Running: PORT=|➜\s+(Local|Network):)/.test(plain)) return []
+    if (plain.includes('Ready on http')) return [`Open ${appOrigin} in your browser.`]
     return [line]
   }
 }
@@ -302,8 +306,6 @@ async function runDevelopmentServers(): Promise<number> {
   }
 
   Object.assign(process.env, createDevServerEnvironment(session))
-
-  console.log(`App: ${session.workerOrigin.origin} · Vite: ${session.viteOrigin.origin}`)
 
   // portless passes Ctrl-C on as SIGINT; the servers stopping after it is no failure.
   let stopping = false

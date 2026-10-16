@@ -103,12 +103,12 @@ test/           tests through the app, each on a D1 database of its own
 
 ### Once per computer
 
-You need [Node.js](https://nodejs.org) 24 or later, [Bun](https://bun.sh) and
-[portless](https://github.com/vercel-labs/portless) running in the background.
-Wrangler, Vite and everything else come with each app. Portless is built for
-Node.js 24, and its `portless doctor` check fails below it, though it runs on
-22; Wrangler needs 22, and `bun run dev` stops with directions on anything
-older.
+You need [Node.js](https://nodejs.org) 22 or later, and better 24,
+[Bun](https://bun.sh) and [portless](https://github.com/vercel-labs/portless)
+running in the background. Wrangler, Vite and everything else come with each
+app. Wrangler needs Node.js 22, and `bun run dev` stops with directions on
+anything older; portless is built for 24, and its `portless doctor` check fails
+below 24, though it runs on 22.
 
 1. Install Node.js with the LTS installer from <https://nodejs.org>. It asks
    for your password. If you use [nvm](https://github.com/nvm-sh/nvm), its

@@ -258,7 +258,7 @@ describe('server output', () => {
       '[worker] Ready on http://127.0.0.1:4115',
     ].flatMap(filter)
 
-    expect(shown).toEqual(['[worker] Ready on http://127.0.0.1:4115', `Open ${app} in your browser.`])
+    expect(shown).toEqual([`Open ${app} in your browser.`])
   })
 
   test('never hides more than the notice, whatever its wording', () => {
@@ -284,6 +284,31 @@ describe('server output', () => {
     expect(shown).toEqual([
       '[worker] Local Explorer, for the local database, KV and traces: http://127.0.0.1:4964/cdn-cgi/local/explorer/api',
       '[worker] ⎔ Starting local server...',
+    ])
+  })
+
+  test("names one address: Vite's banner, loopback addresses and empty lines go", () => {
+    const filter = createOutputFilter(app, () => false)
+    const shown = [
+      '[vite] ',
+      '[vite] portless',
+      '[vite] -- Proxy is running',
+      '[vite] -- vite.reading-list.localhost (auto-resolves to 127.0.0.1)',
+      '[vite] -- Name "vite.reading-list" (from --name flag)',
+      '[vite] -- Using port 4960',
+      '[vite]   -> https://vite.reading-list.localhost',
+      '[vite] Running: PORT=4960 HOST=127.0.0.1 PORTLESS_URL=https://vite.reading-list.localhost vite --port 4960 --strictPort --host 127.0.0.1',
+      '[vite]   VITE v6.4.4  ready in 177 ms',
+      '[vite]   ➜  Local:   http://127.0.0.1:4960/',
+      '\u001b[35m[worker]\u001b[39m ',
+      '[worker] Using secrets defined in .dev.vars',
+      '[worker] [wrangler:info] Ready on http://127.0.0.1:4952',
+    ].flatMap(filter)
+
+    expect(shown).toEqual([
+      '[vite]   VITE v6.4.4  ready in 177 ms',
+      '[worker] Using secrets defined in .dev.vars',
+      `Open ${app} in your browser.`,
     ])
   })
 
