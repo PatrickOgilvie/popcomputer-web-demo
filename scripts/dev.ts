@@ -1,8 +1,12 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
-import { stripVTControlCharacters } from 'node:util'
+import { parseEnv, stripVTControlCharacters } from 'node:util'
+
+import type { EnvDeclaration } from '@popcomputer/web/env'
+
+import { env } from '../src/env'
+import { checkLocal, generatorOf, isPlaceholder, readDevVars, readWranglerVars } from './env'
 
 /** Where `bun run dev` keeps its process id, for `bun run stop` to find it. */
 export const DEV_PID_FILE = '.wrangler/dev.pid'
@@ -154,33 +158,69 @@ export function nodeProblem(report: string | undefined): string | undefined {
   return undefined
 }
 
-/** The local secrets file `bun run dev` writes on first run, with a secret of its own. */
-export function createDevVars(secret: string): string {
-  return [
-    '# Local secrets for `bun run dev`, written on its first run. Never commit this file.',
-    `BETTER_AUTH_SECRET=${secret}`,
-    '',
-  ].join('\n')
+/** The first line of the `.dev.vars` `bun run dev` writes. */
+const DEV_VARS_HEADER = '# Local secrets for `bun run dev`, which wrote this file. Never commit it.'
+
+/** A `.dev.vars` line, the value quoted when it holds anything but letters, digits and base64's symbols. */
+function devVarsLine(name: string, value: string): string {
+  return /^[\w+/=.:@-]*$/.test(value) ? `${name}=${value}` : `${name}=${JSON.stringify(value)}`
 }
 
-/** The placeholder `.dev.vars.example` ships with, which secures nothing. */
-const PLACEHOLDER_SECRET = /^BETTER_AUTH_SECRET=replace-me.*$/m
+/** What `ensureDevVars` did, and which secrets it wrote. */
+export interface DevVarsUpdate {
+  readonly file: 'written' | 'updated' | 'kept'
+  readonly names: ReadonlyArray<string>
+}
 
 /**
- * Writes `.dev.vars` with a fresh Better Auth secret when it is missing, so a
- * new app signs people in without editing anything, and replaces the example's
- * placeholder if someone copied it. Any other file is kept.
+ * Gives `.dev.vars` a new value for each secret src/env.ts can generate and
+ * the file lacks, or holds as the example's placeholder, so a new app signs
+ * people in without editing anything. The first run writes the whole file,
+ * readable only by its owner; every value already there is kept.
  */
-export function ensureDevVars(path = '.dev.vars'): 'written' | 'replaced' | 'kept' {
-  const secret = () => randomBytes(32).toString('base64')
-  if (!existsSync(path)) {
-    writeFileSync(path, createDevVars(secret()), { mode: 0o600 })
-    return 'written'
+export function ensureDevVars(declaration: EnvDeclaration = env, path = '.dev.vars'): DevVarsUpdate {
+  const exists = existsSync(path)
+  let vars = exists ? readFileSync(path, 'utf8') : `${DEV_VARS_HEADER}\n`
+  const current = parseEnv(vars)
+  const names: Array<string> = []
+
+  for (const name of Object.keys(declaration.entries)) {
+    const generate = generatorOf(declaration, name)
+    const value = current[name]
+    if (generate === undefined || (value !== undefined && value !== '' && !isPlaceholder(value))) continue
+    const line = devVarsLine(name, generate())
+    const existing = new RegExp(`^[ \\t]*(?:export[ \\t]+)?${name}[ \\t]*=.*$`, 'm')
+    const separator = vars === '' || vars.endsWith('\n') ? '' : '\n'
+    vars = existing.test(vars) ? vars.replace(existing, () => line) : `${vars}${separator}${line}\n`
+    names.push(name)
   }
-  const vars = readFileSync(path, 'utf8')
-  if (!PLACEHOLDER_SECRET.test(vars)) return 'kept'
-  writeFileSync(path, vars.replace(PLACEHOLDER_SECRET, `BETTER_AUTH_SECRET=${secret()}`))
-  return 'replaced'
+
+  if (names.length === 0) return { file: 'kept', names }
+  writeFileSync(path, vars, { mode: 0o600 })
+  return { file: exists ? 'updated' : 'written', names }
+}
+
+/** What `ensureDevVars` wrote, as a sentence, when it wrote anything. */
+export function describeDevVarsUpdate(update: DevVarsUpdate): string | undefined {
+  const written = update.names.join(' and ')
+  if (update.file === 'written') return `Wrote .dev.vars with a new ${written} for this computer.`
+  if (update.file === 'updated') return `Wrote a new ${written} into .dev.vars.`
+  return undefined
+}
+
+/**
+ * Why the Worker can't start with `.dev.vars` and `wrangler.jsonc`'s vars,
+ * if it can't: what src/env.ts says it needs and they don't hold.
+ */
+export function devVarsProblem(declaration: EnvDeclaration = env, devVarsPath = '.dev.vars'): string | undefined {
+  const wranglerVars = readWranglerVars(readFileSync('wrangler.jsonc', 'utf8'))
+  const { problems } = checkLocal(declaration, wranglerVars, readDevVars(devVarsPath))
+  if (problems.length === 0) return undefined
+  return [
+    "The app can't start without what src/env.ts says it needs:",
+    ...problems.map((problem) => `- ${problem}`),
+    'Then run bun run dev again.',
+  ].join('\n')
 }
 
 /**
@@ -276,9 +316,13 @@ async function runDevelopmentServer(): Promise<number> {
     return 1
   }
 
-  const devVars = ensureDevVars()
-  if (devVars === 'written') console.log('Wrote .dev.vars with a new secret for signing in locally.')
-  if (devVars === 'replaced') console.log("Replaced .dev.vars's placeholder secret with a new one.")
+  const devVars = describeDevVarsUpdate(ensureDevVars())
+  if (devVars !== undefined) console.log(devVars)
+  const envProblem = devVarsProblem()
+  if (envProblem !== undefined) {
+    console.error(envProblem)
+    return 1
+  }
   try {
     applyLocalMigrations()
   } catch (cause: unknown) {

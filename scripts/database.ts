@@ -9,7 +9,7 @@ import { readDatabaseName } from './app-name'
 import { readDatabaseId } from './cloudflare-database'
 import { askYesNo, canAsk, runStep } from './command'
 import { loginProblem } from './deploy'
-import { countAppliedMigrations, ensureDevVars, readRunningDev } from './dev'
+import { countAppliedMigrations, describeDevVarsUpdate, ensureDevVars, readRunningDev } from './dev'
 
 /** Where wrangler and `bun run dev` keep the local D1 databases. */
 export const LOCAL_D1 = '.wrangler/state/v3/d1'
@@ -193,8 +193,8 @@ const SEED_USAGE = 'Usage: bun run db:seed [--yes] [--file path/to/seed.ts or se
  * `bun run dev` has.
  */
 async function runSeedModule(file: string, seed: Seed): Promise<Problem> {
-  const devVars = ensureDevVars()
-  if (devVars === 'written') console.log('Wrote .dev.vars with a new secret for signing in locally.')
+  const devVars = describeDevVarsUpdate(ensureDevVars())
+  if (devVars !== undefined) console.log(devVars)
   const { getPlatformProxy } = await import('wrangler')
   const proxy = await getPlatformProxy<Bindings>({ configPath: 'wrangler.jsonc' })
   try {

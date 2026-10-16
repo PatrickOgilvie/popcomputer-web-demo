@@ -18,6 +18,8 @@
     "db:reset": "bun scripts/database.ts reset",
     "db:execute": "bun scripts/database.ts execute",
     "cloudflare:login": "wrangler login",
+    "env:check": "bun scripts/env-check.ts",
+    "secret": "bun scripts/secret.ts",
     "deploy": "bun scripts/deploy.ts",
     "preview": "bun scripts/preview.ts",
     "status": "bun scripts/status.ts",

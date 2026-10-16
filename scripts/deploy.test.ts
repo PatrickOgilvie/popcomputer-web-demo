@@ -2,19 +2,22 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { Schema as S } from 'effect'
+import { defineEnv, randomSecret, secret, variable, type EnvDeclaration } from '@popcomputer/web/env'
+
 import drizzleConfig from '../drizzle.config'
+import { env } from '../src/env'
 import { findDatabaseId, PLACEHOLDER_DATABASE_ID, readDatabaseId, writeDatabaseId } from './cloudflare-database'
 import { readEvents } from './command'
 import {
-  AUTH_SECRET,
   checkSchema,
   deployDirectly,
   deployStaged,
+  envProblem,
   loginAdvice,
   readDeployUrl,
   readLogin,
   readSchemaCheck,
-  readSecret,
 } from './deploy'
 import { fakeWrangler } from './fake-wrangler'
 
@@ -98,42 +101,70 @@ describe('database', () => {
   })
 })
 
-describe('Better Auth secret', () => {
-  const listed = (stdout: string) => ({ status: 0, stdout, stderr: '' })
-
-  test('finds the secret wrangler secret list shows', () => {
-    const stdout = JSON.stringify([{ name: AUTH_SECRET, type: 'secret_text' }], null, '  ')
-
-    expect(readSecret(listed(stdout), AUTH_SECRET)).toBe('set')
+describe("the Worker's vars and secrets", () => {
+  // An app that has added a mail service's key to the template's declaration.
+  const mailing = defineEnv({
+    BETTER_AUTH_SECRET: secret(S.String.check(S.isMinLength(32)), { generate: randomSecret }),
+    RESEND_API_KEY: secret(S.String.check(S.isStartingWith('re_'))),
+    ENVIRONMENT: variable(S.Literals(['development', 'production', 'test'])),
   })
-
-  test('reads it missing from a Worker without it, or with no secrets', () => {
-    const stdout = JSON.stringify([{ name: 'RESEND_API_KEY', type: 'secret_text' }], null, '  ')
-
-    expect(readSecret(listed(stdout), AUTH_SECRET)).toBe('missing')
-    expect(readSecret(listed('[]'), AUTH_SECRET)).toBe('missing')
+  const listed = (...names: ReadonlyArray<string>) => ({
+    stdout: JSON.stringify(names.map((name) => ({ name, type: 'secret_text' }))),
   })
+  const list = ['secret', 'list', '-c', 'wrangler.jsonc']
 
-  test("reads no Worker before the first deploy, when there's none to hold it yet", () => {
-    const notFound = {
-      status: 1,
-      stdout: '',
-      stderr: [
-        '✘ [ERROR] Worker "book-club" not found.',
-        '',
-        '  If this is a new Worker, run `wrangler deploy` first to create it.',
-        "  Otherwise, check that the Worker name is correct and you're logged into the right account.",
-      ].join('\n'),
+  /** Runs the deploy's env step with the fake wrangler, and says whether it heard of a new Worker. */
+  function withWrangler(plan: Parameters<typeof fakeWrangler>[0], declaration: EnvDeclaration = mailing) {
+    const wrangler = fakeWrangler(plan)
+    const log = spyOn(console, 'log').mockImplementation(() => {})
+    let newWorker = false
+    try {
+      const problem = envProblem(() => {
+        newWorker = true
+      }, declaration)
+      return { problem, newWorker, calls: wrangler.calls() }
+    } finally {
+      log.mockRestore()
+      wrangler.restore()
     }
+  }
 
-    expect(readSecret(notFound, AUTH_SECRET)).toBe('no-worker')
+  test('refuses before changing anything on Cloudflare while a secret nothing generates is missing', () => {
+    const { problem, calls } = withWrangler({ 'secret list': listed() })
+
+    expect(problem).toBe(
+      [
+        'Not deploying: the Worker would start without what src/env.ts says it needs.',
+        "- The secret RESEND_API_KEY isn't set on Cloudflare. Run bun run secret RESEND_API_KEY to set it.",
+        'Then run bun run deploy again.',
+      ].join('\n')
+    )
+    expect(calls).toEqual([list])
   })
 
-  test('reads neither when wrangler failed some other way', () => {
-    const failed = { status: 1, stdout: '', stderr: '✘ [ERROR] A request to the Cloudflare API failed.' }
+  test('uploads a new value for each secret it generates that is missing, and never replaces one', () => {
+    expect(withWrangler({ 'secret list': listed('RESEND_API_KEY') }).calls).toEqual([
+      list,
+      ['secret', 'put', 'BETTER_AUTH_SECRET', '-c', 'wrangler.jsonc'],
+    ])
+    expect(withWrangler({ 'secret list': listed('BETTER_AUTH_SECRET', 'RESEND_API_KEY') }).calls).toEqual([list])
+  })
 
-    expect(readSecret(failed, AUTH_SECRET)).toBeUndefined()
-    expect(readSecret(listed('not json'), AUTH_SECRET)).toBeUndefined()
+  test("hears there's no Worker before the first deploy, so the build goes live directly", () => {
+    const notFound = { status: 1, stderr: '✘ [ERROR] Worker "book-club" not found.' }
+    const { problem, newWorker, calls } = withWrangler({ 'secret list': notFound }, env)
+
+    expect(problem).toBeUndefined()
+    expect(newWorker).toBe(true)
+    expect(calls).toEqual([list, ['secret', 'put', 'BETTER_AUTH_SECRET', '-c', 'wrangler.jsonc']])
+  })
+
+  test('stops when wrangler cannot list the secrets', () => {
+    const failed = { status: 1, stderr: '✘ [ERROR] A request to the Cloudflare API failed.' }
+
+    expect(withWrangler({ 'secret list': failed }).problem).toBe(
+      "✘ [ERROR] A request to the Cloudflare API failed.\nCould not list the Worker's secrets; wrangler says why above."
+    )
   })
 })
 

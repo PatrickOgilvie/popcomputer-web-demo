@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs'
 
+import { env } from '../src/env'
 import { nameApp } from './app-name'
 import { readDatabaseId } from './cloudflare-database'
 import { capture, failure, runStep } from './command'
-import { AUTH_SECRET, loginProblem, readSecret, schemaProblem } from './deploy'
+import { loginProblem, schemaProblem } from './deploy'
+import { checkRemote, readSecretNames, readWranglerVars } from './env'
 import { listUnappliedMigrations } from './migrations'
 import { checkAnswers, READINESS_PATH, shortVersion, turnsOffVersionUrls, uploadVersion } from './versions'
 
@@ -13,13 +15,30 @@ const RERUN = 'bun run preview'
 const NOT_DEPLOYED =
   "The app isn't deployed yet, and a preview runs beside the live app, on its database and secrets. Run bun run deploy first, then bun run preview."
 
-/** Whether the app is on Cloudflare with what a preview needs: its database and its Better Auth secret. */
+/**
+ * Whether the app is on Cloudflare with what a preview needs: its database,
+ * and every var and secret src/env.ts says the Worker needs, since a preview
+ * runs on the live ones.
+ */
 function deployedProblem(): string | undefined {
-  if (readDatabaseId(readFileSync('wrangler.jsonc', 'utf8')) === undefined) return NOT_DEPLOYED
+  const config = readFileSync('wrangler.jsonc', 'utf8')
+  if (readDatabaseId(config) === undefined) return NOT_DEPLOYED
   const list = capture('wrangler', ['secret', 'list', '-c', 'wrangler.jsonc'])
-  const secret = readSecret(list, AUTH_SECRET)
-  if (secret === undefined) return failure(list, "Could not list the Worker's secrets; wrangler says why above.")
-  return secret === 'set' ? undefined : NOT_DEPLOYED
+  const secrets = readSecretNames(list)
+  if (secrets === undefined) return failure(list, "Could not list the Worker's secrets; wrangler says why above.")
+  if (secrets === 'no-worker') return NOT_DEPLOYED
+
+  const { problems, generated } = checkRemote(env, readWranglerVars(config), secrets)
+  const missing = [
+    ...problems,
+    ...generated.map((name) => `The secret ${name} isn't on Cloudflare yet. Run bun run deploy, which makes one.`),
+  ]
+  if (missing.length === 0) return undefined
+  return [
+    "Not previewing: the version would start without what src/env.ts says it needs, since it runs on the live app's secrets.",
+    ...missing.map((problem) => `- ${problem}`),
+    `Then run ${RERUN} again.`,
+  ].join('\n')
 }
 
 /**

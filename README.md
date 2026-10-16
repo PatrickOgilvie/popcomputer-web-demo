@@ -36,7 +36,7 @@ export const updateProject = action(
 ## Contents
 
 - [What it does](#what-it-does) · [How it's built](#how-its-built) · [Running it locally](#running-it-locally) · [Checks](#checks)
-- [Changing the database](#changing-the-database) · [The local database's data](#the-local-databases-data) · [Deploying](#deploying) · [Deploying from GitHub](#deploying-from-github)
+- [Changing the database](#changing-the-database) · [The local database's data](#the-local-databases-data) · [Vars and secrets](#vars-and-secrets) · [Deploying](#deploying) · [Deploying from GitHub](#deploying-from-github)
 - [Upgrading](#upgrading) · [Working with coding agents](#working-with-coding-agents)
 
 ## What it does
@@ -66,6 +66,7 @@ guarantees there.
   | `src/schema.ts` | The D1 tables, with their limits as `CHECK` constraints. |
   | `src/forms.ts` | The schemas forms are validated with, which type the forms in React too. |
   | `src/pages.ts` | Each page's props, taken from the tables' columns. A column a page doesn't name never reaches the browser. |
+  | `src/env.ts` | The Worker's vars and secrets, with their schemas. The Worker, `bun run dev`, `bun run env:check` and `bun run deploy` check them. |
   | `src/app.ts` | `setupWeb`: rendering, D1, Better Auth, route model binding, flash messages and the error page. |
   | `src/routes.ts` | Every route and the action that answers it. |
 
@@ -148,7 +149,9 @@ Cloudflare take the same name when you first set it up there.
 
 `bun run dev` does the setup a new app needs. The first time, it writes
 `.dev.vars` with a new secret for signing in, and each time it applies any new
-migrations to the local D1 database. Then it runs Vite, with Cloudflare's
+migrations to the local D1 database. It stops, saying what to add, if
+`.dev.vars` lacks a secret `src/env.ts` says the app needs, as
+[Vars and secrets](#vars-and-secrets) shows. Then it runs Vite, with Cloudflare's
 Vite plugin running the Worker inside it, so the pages and their scripts share
 one address, and an edit shows in the browser as you save it. Portless gives
 that address the app's name instead of a port. If Node.js is missing, it says
@@ -295,11 +298,65 @@ shell passes it whole. Wrangler's output calls the database on Cloudflare the
 because `preview_database_id` is set; it's the live database all the same,
 with the id in brackets.
 
+## Vars and secrets
+
+`src/env.ts` declares each var and secret the Worker reads, once, with an
+Effect schema for its value. The Worker checks its own against it before it
+serves: a missing or invalid one fails every request, and its log names which.
+The commands below check them before that can happen. The template has two:
+`BETTER_AUTH_SECRET`, which signs sessions, and `ENVIRONMENT`.
+
+A secret, such as another service's API key, is declared with `secret(...)`.
+A secret nobody has to choose, such as `BETTER_AUTH_SECRET`, has a
+`generate`, and `bun run dev` and `bun run deploy` each make one where it's
+missing:
+
+```ts
+export const env = defineEnv({
+  BETTER_AUTH_SECRET: secret(S.String.check(S.isMinLength(32)), { generate: randomSecret }),
+  RESEND_API_KEY: secret(S.String.check(S.isStartingWith('re_'))),
+  ENVIRONMENT: variable(S.Literals(['development', 'production', 'test'])),
+})
+```
+
+Then give it a value in each place the app runs:
+
+- **On this computer**, in `.dev.vars` (git ignores it): add a line
+  `RESEND_API_KEY=re_...`. `bun run dev` won't start without it.
+- **On Cloudflare**, with `bun run secret RESEND_API_KEY`. It asks for the
+  value without showing it, checks it against `src/env.ts`, and uploads it.
+  An agent pipes the value in instead:
+  `printf %s "$RESEND_API_KEY" | bun run secret RESEND_API_KEY`.
+- **In the tests**, in `test/app.ts`'s bindings.
+- **For the Deploy to Cloudflare button**, as a line in `.dev.vars.example`,
+  so it asks for the value; a test checks every secret is there.
+
+A plain var, such as `ENVIRONMENT`, is declared with `variable(...)` and set
+in `vars` in `wrangler.jsonc`, which is committed, so never a secret there.
+`{ optional: true }` declares one the app runs without.
+
+To check them at any time:
+
+```bash
+bun run env:check
+```
+
+checks `.dev.vars` and `wrangler.jsonc`'s vars, as `bun run dev` would.
+
+```bash
+bun run env:check --remote
+```
+
+checks every secret is set on Cloudflare, and `wrangler.jsonc`'s vars, as
+`bun run deploy` would. Cloudflare never shows a secret's value, so it checks
+each one is set, not what it holds. Neither shows a value.
+
 ## Deploying
 
 **With the button** above, Cloudflare copies the repository to your account,
-creates the D1 database and asks for `BETTER_AUTH_SECRET`: give it a new value
-from `openssl rand -base64 32`, not the placeholder. Its deploy applies the
+creates the D1 database and asks for `BETTER_AUTH_SECRET`, and any other
+secret in `.dev.vars.example`: give it a new value from
+`openssl rand -base64 32`, not the placeholder. Its deploy applies the
 migrations, then deploys the Worker.
 
 **From your computer**, the first time, sign in to Cloudflare. This opens your
@@ -322,11 +379,15 @@ It's safe to run again at any time. Each run:
    `bun run db:generate`.
 3. Stops if Wrangler isn't signed in, and says to run
    `bun run cloudflare:login`.
-4. Creates the app's D1 database the first time, and writes its id into
+4. Stops, before changing anything on Cloudflare, if the Worker lacks a
+   secret `src/env.ts` says it needs and nothing can make, naming the
+   `bun run secret NAME` that sets it, or if `wrangler.jsonc` lacks a var.
+   Then uploads a new value for each secret `src/env.ts` can make, such as
+   `BETTER_AUTH_SECRET`, the first time. It never replaces one, so a redeploy
+   keeps everyone signed in.
+5. Creates the app's D1 database the first time, and writes its id into
    `wrangler.jsonc`; commit that change. If the id is lost, the next run finds
    the database by its name instead of making another.
-5. Uploads a new `BETTER_AUTH_SECRET` the first time. It never replaces one,
-   so a redeploy keeps everyone signed in.
 6. Builds the app and applies new migrations to the D1 database.
 7. Uploads the build as a new version of the Worker, beside the live one,
    and checks it answers at its own address, its Version URL: `/login`,
@@ -362,7 +423,9 @@ the same code live. A preview runs on the live app's database and secrets:
 what someone does there, signing up or editing a project, they do to the
 live app's data. It never applies migrations, so it says when the database
 on Cloudflare hasn't had one yet: pages that need it fail on the preview
-until a deploy applies it. The app has to be deployed once first.
+until a deploy applies it. The app has to be deployed once first, and it
+stops, as a deploy does, while the Worker lacks a secret `src/env.ts` says it
+needs.
 
 To see what's live, and whether each database has every migration:
 
@@ -424,6 +487,11 @@ deploy from your computer does, and creates them if nothing has been deployed.
 
 The next push to `main` deploys it. To deploy without pushing, run the
 Deploy workflow from the repository's **Actions** tab.
+
+These two are GitHub's secrets, for reaching Cloudflare; the app's own, which
+`src/env.ts` declares, stay on Cloudflare. Set one nothing generates once,
+with `bun run secret NAME` from your computer: a deploy from GitHub stops,
+naming it, while it's missing.
 
 ## Upgrading
 

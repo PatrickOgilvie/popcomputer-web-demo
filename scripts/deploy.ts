@@ -1,14 +1,17 @@
 import { execFileSync } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Config } from 'drizzle-kit'
 
+import type { EnvDeclaration } from '@popcomputer/web/env'
+
 import drizzleConfig from '../drizzle.config'
+import { env } from '../src/env'
 import { nameApp, readDatabaseName } from './app-name'
 import { createDatabase, findDatabaseId, readDatabaseId, writeDatabaseId } from './cloudflare-database'
-import { capture, failure, parseJson, runStep, runWrangler, type CommandResult } from './command'
+import { capture, failure, parseJson, runStep, runWrangler } from './command'
+import { checkRemote, generatorOf, readSecretNames, readWranglerVars } from './env'
 import { countMigrations } from './migrations'
 import {
   checkAnswers,
@@ -21,8 +24,8 @@ import {
   uploadVersion,
 } from './versions'
 
-/** The secret Better Auth signs sessions with. Replacing it signs everyone out. */
-export const AUTH_SECRET = 'BETTER_AUTH_SECRET'
+/** The command to run again once a problem is fixed. */
+const RERUN = 'bun run deploy'
 
 /** Whether `src/schema.ts` matches the migrations, as far as drizzle-kit can tell. */
 export type SchemaCheck = 'current' | 'changed' | 'failed'
@@ -143,45 +146,46 @@ function databaseProblem(path = 'wrangler.jsonc'): string | undefined {
   return undefined
 }
 
-/** Matches wrangler's error for a Worker that hasn't been deployed yet. */
-const WORKER_NOT_FOUND = /Worker "[^"]+"(?: \(env: [^)]*\))? not found/
-
 /**
- * Whether `wrangler secret list` shows the secret. A Worker that doesn't exist
- * yet, before its first deploy, has none; any other failure is unknown.
+ * Checks every var and secret src/env.ts declares is ready on Cloudflare,
+ * and refuses, before changing anything there, when one isn't and can't be
+ * generated. Then uploads a new value for each missing secret src/env.ts can
+ * generate, and never replaces one, so a redeploy keeps everyone signed in.
+ * Before the first deploy, wrangler creates the Worker, empty, to hold them,
+ * and `onNewWorker` hears there was none.
  */
-export function readSecret(result: CommandResult, name: string): 'set' | 'missing' | 'no-worker' | undefined {
-  if (result.status !== 0) return WORKER_NOT_FOUND.test(result.stderr) ? 'no-worker' : undefined
-  const parsed = parseJson(result.stdout)
-  if (!Array.isArray(parsed)) return undefined
-  const secrets: ReadonlyArray<unknown> = parsed
-  const found = secrets.some(
-    (secret) => typeof secret === 'object' && secret !== null && 'name' in secret && secret.name === name
-  )
-  return found ? 'set' : 'missing'
-}
-
-/**
- * Uploads a new Better Auth secret when the Worker has none, and never
- * replaces one, so a redeploy keeps everyone signed in. Before the first
- * deploy, wrangler creates the Worker, empty, to hold it, and `onNewWorker`
- * hears of it.
- */
-function secretProblem(onNewWorker: () => void): string | undefined {
+export function envProblem(
+  onNewWorker: () => void,
+  declaration: EnvDeclaration = env,
+  config = 'wrangler.jsonc'
+): string | undefined {
   const list = capture('wrangler', ['secret', 'list', '-c', 'wrangler.jsonc'])
-  const secret = readSecret(list, AUTH_SECRET)
-  if (secret === 'set') return undefined
-  if (secret === undefined) return failure(list, "Could not list the Worker's secrets; wrangler says why above.")
-  if (secret === 'no-worker') onNewWorker()
+  const secrets = readSecretNames(list)
+  if (secrets === undefined) return failure(list, "Could not list the Worker's secrets; wrangler says why above.")
 
-  try {
-    // On wrangler's input, the secret is never shown, and kept nowhere else.
-    execFileSync('wrangler', ['secret', 'put', AUTH_SECRET, '-c', 'wrangler.jsonc'], {
-      input: randomBytes(32).toString('base64'),
-      stdio: ['pipe', 'inherit', 'inherit'],
-    })
-  } catch {
-    return `Could not upload ${AUTH_SECRET}; wrangler says why above.`
+  const uploaded = secrets === 'no-worker' ? new Set<string>() : secrets
+  const { problems, generated } = checkRemote(declaration, readWranglerVars(readFileSync(config, 'utf8')), uploaded)
+  if (problems.length > 0) {
+    return [
+      'Not deploying: the Worker would start without what src/env.ts says it needs.',
+      ...problems.map((problem) => `- ${problem}`),
+      `Then run ${RERUN} again.`,
+    ].join('\n')
+  }
+  if (secrets === 'no-worker') onNewWorker()
+
+  for (const name of generated) {
+    const generate = generatorOf(declaration, name)
+    if (generate === undefined) continue
+    try {
+      // On wrangler's input, the secret is never shown, and kept nowhere else.
+      execFileSync('wrangler', ['secret', 'put', name, '-c', 'wrangler.jsonc'], {
+        input: generate(),
+        stdio: ['pipe', 'inherit', 'inherit'],
+      })
+    } catch {
+      return `Could not upload ${name}; wrangler says why above.`
+    }
   }
   return undefined
 }
@@ -202,7 +206,6 @@ export function readDeployUrl(events: ReadonlyArray<object>): string | undefined
   return undefined
 }
 
-const RERUN = 'bun run deploy'
 
 /** What to run after a deploy; a first deploy has none before it to roll back to. */
 function afterDeploy(first: boolean): string {
@@ -309,9 +312,10 @@ export async function deployStaged(check?: CheckOptions): Promise<string | undef
 
 /**
  * Deploys the app, and is safe to run again at any time. Each run checks the
- * schema has its migrations and wrangler is signed in, creates only what the
- * app doesn't have yet on Cloudflare, then builds, migrates and deploys: a
- * new version goes live only once it answers at its own address.
+ * schema has its migrations, wrangler is signed in and the Worker has every
+ * secret src/env.ts says it needs, creates only what the app doesn't have yet
+ * on Cloudflare, then builds, migrates and deploys: a new version goes live
+ * only once it answers at its own address.
  */
 async function deploy(): Promise<number> {
   const name = nameApp()
@@ -321,11 +325,11 @@ async function deploy(): Promise<number> {
   const steps: ReadonlyArray<() => string | undefined | Promise<string | undefined>> = [
     () => schemaProblem(RERUN),
     () => loginProblem(RERUN),
-    () => databaseProblem(),
     () =>
-      secretProblem(() => {
+      envProblem(() => {
         newWorker = true
       }),
+    () => databaseProblem(),
     () => runStep('bun', ['run', 'build'], 'The build failed; it says why above.'),
     () => runStep('bun', ['run', 'db:migrate'], 'Could not apply the migrations on Cloudflare; wrangler says why above.'),
     () =>

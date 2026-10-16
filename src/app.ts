@@ -6,7 +6,7 @@ import { tableSchema } from '@popcomputer/web/schema'
 import manifest from '../dist/client/manifest.json'
 import { createAuth } from './auth'
 import { createDb } from './db'
-import type { Env } from './env'
+import { env, type Env } from './env'
 import { pages } from './pages'
 import { paths } from './paths'
 import * as schema from './schema'
@@ -63,6 +63,8 @@ export const web = setupWeb(new Hono<Env>(), {
   },
   flash: S.Struct({ success: S.String }),
   errors: { component: 'Errors/Error' },
+  // Checks the Worker's vars and secrets against src/env.ts before it serves.
+  env,
 })
 
 declare module '@popcomputer/web' {

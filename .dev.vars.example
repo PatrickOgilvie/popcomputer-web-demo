@@ -1,5 +1,7 @@
-# The secrets the app needs. `bun run dev` writes .dev.vars with a new one the
+# The secrets src/env.ts declares, one line each; a test checks none is
+# missing. The Deploy to Cloudflare button asks for each value here: give
+# BETTER_AUTH_SECRET a new one, from `openssl rand -base64 32`, never this
+# placeholder. `bun run dev` writes .dev.vars with a new BETTER_AUTH_SECRET the
 # first time it runs, so there's nothing to copy; it replaces this placeholder
-# if .dev.vars holds it. The Deploy to Cloudflare button asks for each value
-# here: give it a new one, from `openssl rand -base64 32`, never this placeholder.
+# if .dev.vars holds it.
 BETTER_AUTH_SECRET=replace-me-with-the-output-of-openssl-rand-base64-32

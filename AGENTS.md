@@ -14,6 +14,8 @@ Each is declared once, and everything else derives from it:
 - `src/forms.ts`: the schemas forms are validated with, which type the forms
   in React too (`FormInput<typeof ProjectForm>`).
 - `src/pages.ts`: each page's props, taken from the tables' columns.
+- `src/env.ts`: the Worker's vars and secrets, each with its schema; the
+  bindings type derives from it.
 - `src/app.ts`: `setupWeb`, which owns rendering, D1, auth and route binding.
 - `src/routes.ts`: every route, with the action that answers it.
 - `src/actions/`: the actions. `src/pages/`: the React pages, each listed in
@@ -62,17 +64,37 @@ so its data survives the first deploy writing `database_id`; leave it. It
 makes wrangler label remote D1 runs "preview database", though they run on
 the live one.
 
+## Adding a var or a secret
+
+1. Declare it in `src/env.ts`: `secret(schema)` for a secret, with
+   `{ generate: randomSecret }` when the app can make its own value;
+   `variable(schema)` for a plain var; `{ optional: true }` when the app runs
+   without it. Read it with `config.string('NAME')` or
+   `config.redacted('NAME')`.
+2. A var goes in `vars` in `wrangler.jsonc`. Never put a secret there.
+3. A secret goes in `.dev.vars` (`NAME=value`) for `bun run dev`, as a
+   placeholder line in `.dev.vars.example`, and in `test/app.ts`'s bindings.
+   Ask the user for a value nothing generates; never invent one.
+4. On Cloudflare, `bun run secret NAME` sets it, with the value piped in
+   (`printf %s "$VALUE" | bun run secret NAME`), checked against its schema
+   first. `bun run deploy` uploads a generated one itself.
+
+`bun run env:check` checks `.dev.vars` and the vars, and
+`bun run env:check --remote` checks the secrets on Cloudflare, by name.
+
 ## Deploying
 
 Deploy only when asked, with `bun run deploy`: it does everything, and is
 safe to run again. It stops, saying why, when `src/schema.ts` has a change
-with no migration (run `bun run db:generate`) or when Wrangler isn't signed in
+with no migration (run `bun run db:generate`), when Wrangler isn't signed in
 to Cloudflare (`bun run cloudflare:login` opens the user's browser to allow
-it). It uploads the new version beside the live one, and makes it live only
-once its `/login` answers 200 at the version's own address; it ends by
-printing the app's address. When the check fails, the live version is
-unchanged and the output names the address and what it answered: fetch
-that address to see the error, fix it, and deploy again.
+it), or when the Worker lacks a secret `src/env.ts` needs that nothing
+generates (`bun run secret NAME`, with the user's value). It uploads the new
+version beside the live one, and makes it live only once its `/login`
+answers 200 at the version's own address; it ends by printing the app's
+address. When the check fails, the live version is unchanged and the output
+names the address and what it answered: fetch that address to see the
+error, fix it, and deploy again.
 
 `bun run preview`, also only when asked, uploads a version that takes no
 traffic and prints its address to share; it runs on the live database and

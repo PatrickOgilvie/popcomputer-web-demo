@@ -4,11 +4,16 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { Schema as S } from 'effect'
+import { defineEnv, randomSecret, secret, variable } from '@popcomputer/web/env'
+
+import { env } from '../src/env'
+
 import {
   countAppliedMigrations,
-  createDevVars,
   createOutputFilter,
   createViteArguments,
+  devVarsProblem,
   DIRECT_PORT,
   ensureDevVars,
   InvalidPortlessPort,
@@ -52,21 +57,60 @@ describe('development session', () => {
 })
 
 describe('first run', () => {
-  test('writes .dev.vars with a fresh secret, readable only by its owner', () => {
-    const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
+  const devVarsPath = () => join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
 
-    expect(ensureDevVars(path)).toBe('written')
+  test('writes .dev.vars with each secret src/env.ts generates, readable only by its owner', () => {
+    const path = devVarsPath()
+
+    expect(ensureDevVars(undefined, path)).toEqual({ file: 'written', names: ['BETTER_AUTH_SECRET'] })
     const secret = /^BETTER_AUTH_SECRET=(.+)$/m.exec(readFileSync(path, 'utf8'))?.[1]
     expect(Buffer.from(secret ?? '', 'base64')).toHaveLength(32)
     expect(statSync(path).mode & 0o777).toBe(0o600)
   })
 
-  test('keeps an existing .dev.vars', () => {
-    const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
-    writeFileSync(path, createDevVars('mine'))
+  test('keeps an existing .dev.vars and its values', () => {
+    const path = devVarsPath()
+    writeFileSync(path, 'BETTER_AUTH_SECRET=mine\n')
 
-    expect(ensureDevVars(path)).toBe('kept')
-    expect(readFileSync(path, 'utf8')).toContain('BETTER_AUTH_SECRET=mine')
+    expect(ensureDevVars(undefined, path)).toEqual({ file: 'kept', names: [] })
+    expect(readFileSync(path, 'utf8')).toBe('BETTER_AUTH_SECRET=mine\n')
+  })
+
+  test('adds a secret src/env.ts has come to generate, and leaves the rest to whoever sets it', () => {
+    const path = devVarsPath()
+    writeFileSync(path, '# mine\nBETTER_AUTH_SECRET=mine')
+    const declaration = defineEnv({
+      BETTER_AUTH_SECRET: secret(S.String, { generate: randomSecret }),
+      COOKIE_SECRET: secret(S.String, { generate: () => 'a value with spaces' }),
+      RESEND_API_KEY: secret(S.String),
+      ENVIRONMENT: variable(),
+    })
+
+    expect(ensureDevVars(declaration, path)).toEqual({ file: 'updated', names: ['COOKIE_SECRET'] })
+    expect(readFileSync(path, 'utf8')).toBe('# mine\nBETTER_AUTH_SECRET=mine\nCOOKIE_SECRET="a value with spaces"\n')
+  })
+})
+
+describe("the Worker's vars and secrets", () => {
+  test("starts with the template's .dev.vars", () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
+    ensureDevVars(undefined, path)
+
+    expect(devVarsProblem(undefined, path)).toBeUndefined()
+  })
+
+  test('stops, naming what to add, when a secret nobody generates is missing', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
+    writeFileSync(path, 'BETTER_AUTH_SECRET=a-secret-of-thirty-two-characters-or-more\n')
+    const declaration = defineEnv({ ...env.entries, RESEND_API_KEY: secret(S.String) })
+
+    expect(devVarsProblem(declaration, path)).toBe(
+      [
+        "The app can't start without what src/env.ts says it needs:",
+        '- The secret RESEND_API_KEY is missing from .dev.vars. Add a line RESEND_API_KEY=its value there.',
+        'Then run bun run dev again.',
+      ].join('\n')
+    )
   })
 })
 
@@ -91,9 +135,9 @@ describe('Node.js for wrangler', () => {
 describe('first run, copied example', () => {
   test("replaces the example's placeholder secret", () => {
     const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
-    writeFileSync(path, '# copied\nBETTER_AUTH_SECRET=replace-me-with-the-output-of-openssl-rand-base64-32\n')
+    writeFileSync(path, `# copied\n${readFileSync('.dev.vars.example', 'utf8')}`)
 
-    expect(ensureDevVars(path)).toBe('replaced')
+    expect(ensureDevVars(undefined, path)).toEqual({ file: 'updated', names: ['BETTER_AUTH_SECRET'] })
     const vars = readFileSync(path, 'utf8')
     expect(vars).toStartWith('# copied\n')
     expect(vars).not.toContain('replace-me')
