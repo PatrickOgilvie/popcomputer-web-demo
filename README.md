@@ -140,6 +140,7 @@ cd my-app
 bun run dev
 ```
 
+`bun create` suggests `bun dev` when it finishes, which runs the same script.
 Open <https://my-app.localhost>. The app's address is its name, which
 `bun create` takes from the folder you chose. Its Worker and database on
 Cloudflare take the same name when you first set it up there.
@@ -155,18 +156,26 @@ with Ctrl-C, or, when it runs in another terminal or in the background, with
 `bun run stop` in its folder. If it stops by itself, it says so. Apps made
 from the template can run at once, each at its own address.
 
-Until you first set the app up on Cloudflare, the dev server's output shows
-the template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
-gives the Worker and its database the app's name.
+When a coding agent runs `bun run dev`, its output also names the Local
+Explorer, at `/cdn-cgi/local/explorer` on the app's address: Cloudflare's page
+for looking at the local database, KV and traces, with an API for agents at
+`/cdn-cgi/local/explorer/api`. The app itself is at its address's other paths.
+
+Until you first set the app up on Cloudflare, `wrangler.jsonc` holds the
+template's names, so a build's `dist/popcomputer_web_demo` folder and
+`bun run db:migrate:local`'s `popcomputer-web-demo-db` show them;
+`bun run cloudflare:setup` gives the Worker and its database the app's name.
+`bun run dev` already uses the app's name.
 
 If the address shows portless's "404 - Not Found" page, the app isn't running:
 start it with `bun run dev`, whatever command that page suggests.
 
 To try a form from a terminal, post its fields with curl, which the app
 answers as a command-line client: a form that fails validation gets a 422
-with the errors as JSON, and a sign-up a 303 to `/` with its session cookie.
-Send the `Origin` a browser would: Better Auth refuses a sign-up without one,
-here as in production. Put your app's name in place of `my-app`.
+with the errors as JSON, and a sign-up or sign-in a 303 to `/` with its
+session cookie, which curl keeps in `cookies.txt` (git ignores it). Send the
+`Origin` a browser would: Better Auth refuses a sign-up or sign-in without
+one, here as in production. Put your app's name in place of `my-app`.
 
 ```bash
 curl -i https://my-app.localhost/register -c cookies.txt \
@@ -174,6 +183,16 @@ curl -i https://my-app.localhost/register -c cookies.txt \
   --data-urlencode 'name=Ada' --data-urlencode 'email=ada@example.com' \
   --data-urlencode 'password=at least twelve characters'
 curl -b cookies.txt https://my-app.localhost/
+```
+
+Signing in posts the email and password to `/login` the same way; a wrong
+password gets a 422.
+
+```bash
+curl -i https://my-app.localhost/login -c cookies.txt \
+  -H 'Origin: https://my-app.localhost' \
+  --data-urlencode 'email=ada@example.com' \
+  --data-urlencode 'password=at least twelve characters'
 ```
 
 Without the portless service, `bun run dev` asks for your password the first

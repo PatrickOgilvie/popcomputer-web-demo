@@ -166,7 +166,7 @@ describe('server output', () => {
     expect(shown).toEqual(['  VITE v6.4.4  ready in 2230 ms', `  Open ${app} in your browser.`])
   })
 
-  test("shortens the plugin's routes for AI agents to the Local Explorer's address", () => {
+  test("shortens the plugin's routes for AI agents to the Local Explorer at the app's address", () => {
     const filter = createOutputFilter(app)
     const shown = [
       'The Cloudflare Vite plugin detected this dev session is running in an AI agent.',
@@ -179,7 +179,7 @@ describe('server output', () => {
     ].flatMap(filter)
 
     expect(shown).toEqual([
-      'Local Explorer, for the local database, KV and traces: http://127.0.0.1:4720/cdn-cgi/local/explorer/api',
+      `Local Explorer, to look at the local database, KV and traces: ${app}/cdn-cgi/local/explorer (its API: ${app}/cdn-cgi/local/explorer/api)`,
       '9:04:28 AM [vite] (client) hmr update /src/pages/Auth/Login.tsx',
     ])
   })

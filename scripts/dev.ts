@@ -212,7 +212,8 @@ const EXPLORER_NOTICE_LINES = 20
  * Rewrites Vite's output for a person, so it names one address to open: it
  * drops Node's punycode deprecation notice, the inspector's port notice and
  * Vite's loopback addresses,
- * shortens the list of routes for AI agents to the Local Explorer's address,
+ * shortens the list of routes for AI agents to the Local Explorer's page and
+ * API at the app's own address,
  * and once Vite is ready says where to open the app. The agents' list is
  * skipped for at most a few lines, so a change to its wording never hides
  * anything after it.
@@ -229,8 +230,9 @@ export function createOutputFilter(appOrigin: string): (line: string) => Readonl
     }
     if (explorerNoticeLeft > 0) {
       explorerNoticeLeft = plain.trimEnd().endsWith('- OpenAPI schema') ? 0 : explorerNoticeLeft - 1
-      const explorer = /The Local Explorer API is available at (\S+)/.exec(plain)
-      return explorer === null ? [] : [`Local Explorer, for the local database, KV and traces: ${explorer[1]}`]
+      if (!plain.includes('The Local Explorer API is available at')) return []
+      const explorer = `${appOrigin}/cdn-cgi/local/explorer`
+      return [`Local Explorer, to look at the local database, KV and traces: ${explorer} (its API: ${explorer}/api)`]
     }
     if (plain.includes('[DEP0040]')) {
       skipDeprecationHint = true
