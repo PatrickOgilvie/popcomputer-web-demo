@@ -14,6 +14,7 @@ if (databaseName === undefined) {
   process.exit(1)
 }
 
-execFileSync('wrangler', ['d1', 'create', databaseName, '--binding', 'DB', '--update-config'], {
+// -c names wrangler.jsonc itself: after a build, wrangler otherwise reads the copy in dist/.
+execFileSync('wrangler', ['d1', 'create', databaseName, '--binding', 'DB', '--update-config', '-c', 'wrangler.jsonc'], {
   stdio: 'inherit',
 })

@@ -146,14 +146,15 @@ Cloudflare take the same name when you first set it up there.
 
 `bun run dev` does the setup a new app needs. The first time, it writes
 `.dev.vars` with a new secret for signing in, and each time it applies any new
-migrations to the local D1 database. Then it runs the Worker and Vite together
-through portless, which gives each app a name instead of a port, so an edit
-shows in the browser as you save it. If Node.js is missing, it says so and
-stops. Once the Worker is ready it says which address to open. Stop the app
+migrations to the local D1 database. Then it runs Vite, with Cloudflare's
+Vite plugin running the Worker inside it, so the pages and their scripts share
+one address, and an edit shows in the browser as you save it. Portless gives
+that address the app's name instead of a port. If Node.js is missing, it says
+so and stops. Once Vite is ready it says which address to open. Stop the app
 with Ctrl-C.
 
-Until you first set the app up on Cloudflare, Wrangler's output shows the
-template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
+Until you first set the app up on Cloudflare, the dev server's output shows
+the template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
 gives the Worker and its database the app's name.
 
 If the address shows portless's "404 - Not Found" page, the app isn't running:
@@ -162,9 +163,12 @@ start it with `bun run dev`, whatever command that page suggests.
 To try a form from a terminal, post its fields with curl, which the app
 answers as a command-line client: a form that fails validation gets a 422
 with the errors as JSON, and a sign-up a 303 to `/` with its session cookie.
+Send the `Origin` a browser would: Better Auth refuses a sign-up without one,
+here as in production.
 
 ```bash
 curl -i https://my-app.localhost/register -c cookies.txt \
+  -H 'Origin: https://my-app.localhost' \
   --data-urlencode 'name=Ada' --data-urlencode 'email=ada@example.com' \
   --data-urlencode 'password=at least twelve characters'
 curl -b cookies.txt https://my-app.localhost/
@@ -172,7 +176,13 @@ curl -b cookies.txt https://my-app.localhost/
 
 Without the portless service, `bun run dev` asks for your password the first
 time it runs, and again after a restart. `PORTLESS=0 bun run dev` skips
-portless and serves the app at <http://localhost:8787>, with Vite on port 5173.
+portless and serves the app at <http://localhost:5173>.
+
+A build (`bun run build`) writes the client to `dist/client`, with the manifest
+the Worker reads its bundle's file names from, and the Worker to `dist/`
+beside it, with a copy of `wrangler.jsonc` that `wrangler deploy` uses. The
+package scripts pass `-c wrangler.jsonc` to Wrangler's other commands, so they
+read your own config rather than that copy.
 
 In a copy you cloned or made with GitHub's "Use this template", run
 `bun install` first; the app's address then comes from `name` in

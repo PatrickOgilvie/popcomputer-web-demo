@@ -3,167 +3,48 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { InvalidDevOrigin, readViteDevServerConfiguration } from './dev-environment'
 import {
   countAppliedMigrations,
-  createDevCommands,
-  createOutputFilter,
-  createDevServerEnvironment,
   createDevVars,
+  createOutputFilter,
+  createViteArguments,
+  DIRECT_PORT,
   ensureDevVars,
   InvalidPortlessPort,
+  InvalidPortlessUrl,
   nodeProblem,
-  type PortlessProcessEnvironment,
   readDevSession,
 } from './dev'
 
-// A sample app, so the tests pass whatever name bun create gave this one.
-const SAMPLE_VITE_ROUTE = 'vite.sample-app'
-const readSampleSession = (environment: PortlessProcessEnvironment, resolveUrl?: (routeName: string) => string) =>
-  readDevSession(environment, resolveUrl, SAMPLE_VITE_ROUTE)
-
-const resolveHttpsVite = (routeName: string) => `https://${routeName}.localhost`
-
 describe('development session', () => {
-  test('pairs the portless Worker route with its sibling Vite route', () => {
-    const resolved: Array<string> = []
-    const session = readSampleSession(
-      {
-        PORT: '4123',
-        PORTLESS_URL: 'https://sample-app.localhost',
-      },
-      (routeName) => {
-        resolved.push(routeName)
-        return resolveHttpsVite(routeName)
-      }
-    )
+  test('serves the app at the address portless gave it, on its port', () => {
+    const session = readDevSession({ PORT: '4123', PORTLESS_URL: 'https://reading-list.localhost' })
 
-    expect(resolved).toEqual([SAMPLE_VITE_ROUTE])
-    expect(session.mode).toBe('portless')
-    expect(session.workerPort).toBe(4123)
-    expect(session.workerOrigin.origin).toBe(
-      'https://sample-app.localhost'
-    )
-    expect(session.viteOrigin.origin).toBe(
-      'https://vite.sample-app.localhost'
-    )
+    expect(session).toEqual({ mode: 'portless', port: 4123, appOrigin: 'https://reading-list.localhost' })
+    expect(createViteArguments(session)).toEqual(['--port', '4123', '--strictPort', '--host', '127.0.0.1'])
   })
 
   test('keeps worktree prefixes and explicit proxy ports from portless', () => {
-    const session = readSampleSession(
-      {
-        PORT: '4999',
-        PORTLESS_URL: 'http://fix-ui.sample-app.localhost:1355',
-      },
-      () => 'http://fix-ui.vite.sample-app.localhost:1355'
+    const session = readDevSession({ PORT: '4999', PORTLESS_URL: 'http://fix-ui.reading-list.localhost:1355' })
+
+    expect(session.appOrigin).toBe('http://fix-ui.reading-list.localhost:1355')
+  })
+
+  test('falls back to one fixed port when portless is bypassed', () => {
+    const session = readDevSession({})
+
+    expect(session).toEqual({ mode: 'direct', port: DIRECT_PORT, appOrigin: `http://localhost:${DIRECT_PORT}` })
+    expect(createViteArguments(session)).toEqual(['--port', String(DIRECT_PORT), '--strictPort'])
+  })
+
+  test.each(['0', '65536', '4123.5', '04123', undefined])('rejects an invalid portless PORT %p', (PORT) => {
+    expect(() => readDevSession({ PORT, PORTLESS_URL: 'https://reading-list.localhost' })).toThrow(
+      InvalidPortlessPort
     )
-
-    expect(createDevServerEnvironment(session)).toEqual({
-      DEV_VITE_ORIGIN: 'http://fix-ui.vite.sample-app.localhost:1355',
-      DEV_WORKER_ORIGIN: 'http://fix-ui.sample-app.localhost:1355',
-    })
   })
 
-  test('falls back to one fixed loopback pair when portless is bypassed', () => {
-    const session = readSampleSession({}, () => {
-      throw new Error('portless must not be consulted in direct mode')
-    })
-
-    expect(session.mode).toBe('direct')
-    expect(createDevServerEnvironment(session)).toEqual({
-      DEV_VITE_ORIGIN: 'http://localhost:5173',
-      DEV_WORKER_ORIGIN: 'http://localhost:8787',
-    })
-  })
-
-  test.each(['0', '65536', '4123.5', '04123', undefined])(
-    'rejects an invalid portless PORT %p',
-    (PORT) => {
-      expect(() =>
-        readSampleSession(
-          { PORT, PORTLESS_URL: 'https://sample-app.localhost' },
-          resolveHttpsVite
-        )
-      ).toThrow(InvalidPortlessPort)
-    }
-  )
-
-  test.each([
-    'https://example.com',
-    'https://sample-app.localhost/',
-    'https://sample-app.localhost/path',
-    'https://user:pass@sample-app.localhost',
-    'ftp://sample-app.localhost',
-  ])('rejects a non-local or non-exact route origin %p', (PORTLESS_URL) => {
-    expect(() =>
-      readSampleSession({ PORT: '4123', PORTLESS_URL }, resolveHttpsVite)
-    ).toThrow(InvalidDevOrigin)
-  })
-})
-
-describe('development commands', () => {
-  test('runs Vite as a portless route and Wrangler at the public origin', () => {
-    const session = readSampleSession(
-      {
-        PORT: '4123',
-        PORTLESS_URL: 'https://sample-app.localhost',
-      },
-      resolveHttpsVite
-    )
-
-    expect(createDevCommands(session)).toEqual([
-      {
-        name: 'vite',
-        command: 'portless run --name vite.sample-app vite',
-      },
-      {
-        name: 'worker',
-        command:
-          'wrangler dev --port 4123 --ip 127.0.0.1 --local-upstream sample-app.localhost --upstream-protocol https --var ENVIRONMENT:development --var DEV_VITE_ORIGIN:https://vite.sample-app.localhost',
-      },
-    ])
-  })
-
-  test('pins strict default ports when portless is bypassed', () => {
-    const [vite, worker] = createDevCommands(readSampleSession({}))
-
-    expect(vite?.command).toBe('vite --port 5173 --strictPort')
-    expect(worker?.command).toContain('--port 8787')
-    expect(worker?.command).toContain('--local-upstream localhost:8787')
-    expect(worker?.command).toContain('--upstream-protocol http ')
-  })
-})
-
-describe('Vite development policy', () => {
-  test('restricts CORS to the exact paired Worker origin', () => {
-    expect(
-      readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
-        DEV_WORKER_ORIGIN: 'https://sample-app.localhost',
-      })
-    ).toEqual({
-      viteOrigin: 'https://vite.sample-app.localhost',
-      workerOrigin: 'https://sample-app.localhost',
-    })
-
-    expect(() =>
-      readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
-        DEV_WORKER_ORIGIN: 'https://example.com',
-      })
-    ).toThrow('DEV_WORKER_ORIGIN must be an exact local HTTP(S) origin.')
-  })
-
-  test('applies no dev-server policy to standalone Vite commands', () => {
-    expect(readViteDevServerConfiguration({})).toBeUndefined()
-  })
-
-  test('requires both origins once either is supplied', () => {
-    expect(() =>
-      readViteDevServerConfiguration({
-        DEV_VITE_ORIGIN: 'https://vite.sample-app.localhost',
-      })
-    ).toThrow('DEV_WORKER_ORIGIN must be an exact local HTTP(S) origin.')
+  test.each(['not a url', 'ftp://reading-list.localhost'])('rejects a portless address %p', (PORTLESS_URL) => {
+    expect(() => readDevSession({ PORT: '4123', PORTLESS_URL })).toThrow(InvalidPortlessUrl)
   })
 })
 
@@ -247,79 +128,59 @@ describe('local migrations', () => {
 describe('server output', () => {
   const app = 'https://reading-list.localhost'
 
-  test("drops wrangler's notice that crons don't run locally", () => {
-    const filter = createOutputFilter(app, () => false)
+  test("names one address: Vite's loopback lines go, and it says where to open the app", () => {
+    const filter = createOutputFilter(app)
     const shown = [
-      '[worker] ▲ [WARNING] Scheduled Workers are not automatically triggered during local development.',
-      '[worker] ',
-      '[worker]   To manually trigger a scheduled event, run:',
-      '[worker]     curl "http://127.0.0.1:4115/cdn-cgi/local/scheduled"',
-      '[worker]   For more details, see https://developers.cloudflare.com/workers/configuration/cron-triggers/#test-cron-triggers-locally',
-      '[worker] Ready on http://127.0.0.1:4115',
+      '',
+      '  VITE v6.4.4  ready in 2230 ms',
+      '',
+      '  ➜  Local:   http://127.0.0.1:4720/',
+      '  ➜  Debug:   http://127.0.0.1:4720/__debug',
     ].flatMap(filter)
 
-    expect(shown).toEqual([`Open ${app} in your browser.`])
+    expect(shown).toEqual(['', '  VITE v6.4.4  ready in 2230 ms', `  Open ${app} in your browser.`, ''])
   })
 
-  test('never hides more than the notice, whatever its wording', () => {
-    const filter = createOutputFilter(app, () => false)
-    filter('[worker] ▲ [WARNING] Scheduled Workers are not automatically triggered during local development.')
-    const later = Array.from({ length: 10 }, (_, line) => `[worker] line ${line}`).flatMap(filter)
-
-    expect(later).toHaveLength(4)
-  })
-
-  test("shortens wrangler's routes for AI agents to the Local Explorer's address", () => {
-    const filter = createOutputFilter(app, () => false)
+  test("drops Node's punycode deprecation notice", () => {
+    const filter = createOutputFilter(app)
     const shown = [
-      '[worker] Wrangler detected this dev session is running in an AI agent.',
-      '[worker] The Local Explorer API is available at http://127.0.0.1:4964/cdn-cgi/local/explorer/api',
-      '[worker] Useful routes:',
-      '[worker]   GET http://127.0.0.1:4964/cdn-cgi/local/explorer/api/d1/database - D1 databases',
-      "[worker] If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):",
-      '[worker]   GET http://127.0.0.1:4964/cdn-cgi/local/explorer/api - OpenAPI schema',
-      '[worker] ⎔ Starting local server...',
+      '(node:31064) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.',
+      '(Use `node --trace-deprecation ...` to show where the warning was created)',
+      'Using secrets defined in .dev.vars',
     ].flatMap(filter)
 
-    expect(shown).toEqual([
-      '[worker] Local Explorer, for the local database, KV and traces: http://127.0.0.1:4964/cdn-cgi/local/explorer/api',
-      '[worker] ⎔ Starting local server...',
-    ])
+    expect(shown).toEqual(['Using secrets defined in .dev.vars'])
   })
 
-  test("names one address: Vite's banner, loopback addresses and empty lines go", () => {
-    const filter = createOutputFilter(app, () => false)
+  test("shortens the plugin's routes for AI agents to the Local Explorer's address", () => {
+    const filter = createOutputFilter(app)
     const shown = [
-      '[vite] ',
-      '[vite] portless',
-      '[vite] -- Proxy is running',
-      '[vite] -- vite.reading-list.localhost (auto-resolves to 127.0.0.1)',
-      '[vite] -- Name "vite.reading-list" (from --name flag)',
-      '[vite] -- Using port 4960',
-      '[vite]   -> https://vite.reading-list.localhost',
-      '[vite] Running: PORT=4960 HOST=127.0.0.1 PORTLESS_URL=https://vite.reading-list.localhost vite --port 4960 --strictPort --host 127.0.0.1',
-      '[vite]   VITE v6.4.4  ready in 177 ms',
-      '[vite]   ➜  Local:   http://127.0.0.1:4960/',
-      '\u001b[35m[worker]\u001b[39m ',
-      '[worker] Using secrets defined in .dev.vars',
-      '[worker] [wrangler:info] Ready on http://127.0.0.1:4952',
+      'The Cloudflare Vite plugin detected this dev session is running in an AI agent.',
+      'The Local Explorer API is available at http://127.0.0.1:4720/cdn-cgi/local/explorer/api',
+      'Useful routes:',
+      '  GET http://127.0.0.1:4720/cdn-cgi/local/explorer/api/d1/database - D1 databases',
+      "If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):",
+      '  GET http://127.0.0.1:4720/cdn-cgi/local/explorer/api - OpenAPI schema',
+      '9:04:28 AM [vite] (client) hmr update /src/pages/Auth/Login.tsx',
     ].flatMap(filter)
 
     expect(shown).toEqual([
-      '[vite]   VITE v6.4.4  ready in 177 ms',
-      '[worker] Using secrets defined in .dev.vars',
-      `Open ${app} in your browser.`,
+      'Local Explorer, for the local database, KV and traces: http://127.0.0.1:4720/cdn-cgi/local/explorer/api',
+      '9:04:28 AM [vite] (client) hmr update /src/pages/Auth/Login.tsx',
     ])
   })
 
-  test("drops the servers' exit codes only after Ctrl-C", () => {
-    let stopping = false
-    const filter = createOutputFilter(app, () => stopping)
-    const exited = '[vite] portless run --name vite.reading-list vite exited with code 130'
+  test('never hides more than the agents\' list, whatever its wording', () => {
+    const filter = createOutputFilter(app)
+    filter('The Cloudflare Vite plugin detected this dev session is running in an AI agent.')
+    const later = Array.from({ length: 30 }, (_, line) => `line ${line}`).flatMap(filter)
 
-    expect(filter(exited)).toEqual([exited])
-    stopping = true
-    expect(filter(exited)).toEqual([])
-    expect(filter('--> Sending SIGTERM to other processes..')).toEqual([])
+    expect(later).toHaveLength(10)
+  })
+
+  test('reads lines through colour codes', () => {
+    const filter = createOutputFilter(app)
+
+    expect(filter('  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   http://127.0.0.1:4720/')).toEqual([])
   })
 })

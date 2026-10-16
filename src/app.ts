@@ -3,7 +3,7 @@ import { Schema as S, Struct } from 'effect'
 import { createTemplate, createVersion, setupWeb, vite } from '@popcomputer/web'
 import { betterAuthSession } from '@popcomputer/web/auth'
 import { tableSchema } from '@popcomputer/web/schema'
-import manifest from '../dist/manifest.json'
+import manifest from '../dist/client/manifest.json'
 import { createAuth } from './auth'
 import { createDb } from './db'
 import type { Env } from './env'
@@ -25,14 +25,15 @@ const head = [
 
 export const web = setupWeb(new Hono<Env>(), {
   version: createVersion(manifest),
-  // In development the pages load from Vite's dev server, with hot reload;
-  // otherwise from the bundle `bun run build` wrote.
+  // In development the Worker runs inside Vite's dev server, so the pages load
+  // from the page's own address, with hot reload; otherwise from the bundle
+  // `bun run build` wrote.
   render: createTemplate((c) =>
     c.env.ENVIRONMENT === 'development'
       ? {
           title,
-          scripts: [vite.script('/src/main.tsx', c.env.DEV_VITE_ORIGIN)],
-          head: `${head}\n    ${vite.hmrHead(c.env.DEV_VITE_ORIGIN)}`,
+          scripts: [vite.script('/src/main.tsx', new URL(c.req.url).origin)],
+          head: `${head}\n    ${vite.hmrHead(new URL(c.req.url).origin)}`,
         }
       : { title, scripts: [`/${entry.file}`], styles: (entry.css ?? []).map((file) => `/${file}`), head }
   ),
