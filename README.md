@@ -112,8 +112,8 @@ below 24, though it runs on 22.
 
 1. Install Node.js with the LTS installer from <https://nodejs.org>. It asks
    for your password. If you use [nvm](https://github.com/nvm-sh/nvm), its
-   Node.js comes first instead: run `nvm install 24` and
-   `nvm alias default 24`.
+   Node.js comes first instead: run `nvm install 24`, `nvm alias default 24`
+   and `nvm use 24`.
 2. Install Bun, then open a new terminal:
 
    ```bash
@@ -151,7 +151,9 @@ Vite plugin running the Worker inside it, so the pages and their scripts share
 one address, and an edit shows in the browser as you save it. Portless gives
 that address the app's name instead of a port. If Node.js is missing, it says
 so and stops. Once Vite is ready it says which address to open. Stop the app
-with Ctrl-C.
+with Ctrl-C, or, when it runs in another terminal or in the background, with
+`bun run stop` in its folder. If it stops by itself, it says so. Apps made
+from the template can run at once, each at its own address.
 
 Until you first set the app up on Cloudflare, the dev server's output shows
 the template's names, such as `popcomputer-web-demo-db`; `bun run cloudflare:setup`
@@ -164,7 +166,7 @@ To try a form from a terminal, post its fields with curl, which the app
 answers as a command-line client: a form that fails validation gets a 422
 with the errors as JSON, and a sign-up a 303 to `/` with its session cookie.
 Send the `Origin` a browser would: Better Auth refuses a sign-up without one,
-here as in production.
+here as in production. Put your app's name in place of `my-app`.
 
 ```bash
 curl -i https://my-app.localhost/register -c cookies.txt \

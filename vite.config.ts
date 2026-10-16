@@ -4,21 +4,40 @@ import { cloudflare } from '@cloudflare/vite-plugin'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+import packageJson from './package.json'
+import { cloudflareName } from './scripts/app-name'
+
 export default defineConfig(({ command, isPreview }) => ({
   plugins: [
     tailwindcss(),
     react(),
     // Runs the Worker inside Vite's dev server, so the pages and their scripts
     // share one address. Only the dev server runs it in development; a build
-    // keeps wrangler.jsonc's production vars.
+    // keeps wrangler.jsonc's production vars. In development the Worker takes
+    // the app's name, so two apps made from the template can run at once.
     cloudflare(
       command === 'serve' && isPreview !== true
-        ? { config: (worker) => ({ vars: { ...worker.vars, ENVIRONMENT: 'development' } }) }
+        ? {
+            config: (worker) => ({
+              name: cloudflareName(packageJson.name),
+              vars: { ...worker.vars, ENVIRONMENT: 'development' },
+            }),
+          }
         : {}
     ),
   ],
   resolve: {
     alias: { '~': resolve(import.meta.dirname, 'src') },
+  },
+  build: {
+    rollupOptions: {
+      // zod's notes beside its own annotations look like misplaced ones to
+      // Rollup, which drops the notes; the code is unchanged.
+      onwarn(warning, warn) {
+        if (warning.code === 'INVALID_ANNOTATION' && warning.id?.includes('/node_modules/zod/') === true) return
+        warn(warning)
+      },
+    },
   },
   environments: {
     client: {

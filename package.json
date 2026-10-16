@@ -7,8 +7,9 @@
   "type": "module",
   "scripts": {
     "postinstall": "bun run build",
-    "build": "vite build",
+    "build": "NODE_OPTIONS=\"--disable-warning=DEP0040 $NODE_OPTIONS\" vite build",
     "dev": "bun scripts/run-dev.ts",
+    "stop": "bun scripts/stop-dev.ts",
     "check": "tsc --noEmit && echo 'Types: no errors' && oxlint && echo 'Lint: no problems' && bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply DB --remote -c wrangler.jsonc",

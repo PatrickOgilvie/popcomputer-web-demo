@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { spawn } from 'node:child_process'
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,9 @@ import {
   InvalidPortlessPort,
   InvalidPortlessUrl,
   nodeProblem,
+  processTree,
   readDevSession,
+  readRunningDev,
 } from './dev'
 
 describe('development session', () => {
@@ -152,6 +155,17 @@ describe('server output', () => {
     expect(shown).toEqual(['Using secrets defined in .dev.vars'])
   })
 
+  test("drops the notice that the debugger's usual port is taken", () => {
+    const filter = createOutputFilter(app)
+    const shown = [
+      'Default inspector port 9229 not available, using 9230 instead',
+      '',
+      '  VITE v6.4.4  ready in 2230 ms',
+    ].flatMap(filter)
+
+    expect(shown).toEqual(['  VITE v6.4.4  ready in 2230 ms', `  Open ${app} in your browser.`])
+  })
+
   test("shortens the plugin's routes for AI agents to the Local Explorer's address", () => {
     const filter = createOutputFilter(app)
     const shown = [
@@ -182,5 +196,36 @@ describe('server output', () => {
     const filter = createOutputFilter(app)
 
     expect(filter('  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   http://127.0.0.1:4720/')).toEqual([])
+  })
+})
+
+describe('bun run stop', () => {
+  test("finds no server when the file is missing, isn't a process id, or names another program", () => {
+    const folder = mkdtempSync(join(tmpdir(), 'dev-pid-'))
+    const path = join(folder, 'dev.pid')
+    expect(readRunningDev(path)).toBeUndefined()
+
+    writeFileSync(path, 'not a process\n')
+    expect(readRunningDev(path)).toBeUndefined()
+
+    writeFileSync(path, `${process.pid}\n`)
+    expect(readRunningDev(path)).toBeUndefined()
+  })
+
+  test('interrupts the processes the server started, as well as the server', async () => {
+    const shell = spawn('sh', ['-c', 'sleep 30 & wait'], { stdio: 'ignore' })
+    const pid = shell.pid ?? 0
+    try {
+      let tree = processTree(pid)
+      for (let tries = 0; tree.length < 2 && tries < 50; tries += 1) {
+        await Bun.sleep(20)
+        tree = processTree(pid)
+      }
+
+      expect(tree[0]).toBe(pid)
+      expect(tree).toHaveLength(2)
+    } finally {
+      for (const each of [...processTree(pid)].reverse()) process.kill(each, 'SIGKILL')
+    }
   })
 })

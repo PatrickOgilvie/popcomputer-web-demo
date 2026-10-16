@@ -2,6 +2,48 @@ import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { stripVTControlCharacters } from 'node:util'
+
+/** Where `bun run dev` keeps its process id, for `bun run stop` to find it. */
+export const DEV_PID_FILE = '.wrangler/dev.pid'
+
+/**
+ * The `bun run dev` whose process id DEV_PID_FILE holds, if it is still
+ * running. A process that took the id over after it ended runs something else.
+ */
+export function readRunningDev(path = DEV_PID_FILE): number | undefined {
+  let pid: number
+  try {
+    pid = Number(readFileSync(path, 'utf8').trim())
+  } catch {
+    return undefined
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return undefined
+  try {
+    const command = execFileSync('ps', ['-o', 'command=', '-p', String(pid)], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return command.includes('scripts/run-dev.ts') ? pid : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** A process and every process it started, parents before their children. */
+export function processTree(pid: number): ReadonlyArray<number> {
+  let children: ReadonlyArray<number>
+  try {
+    children = execFileSync('pgrep', ['-P', String(pid)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map(Number)
+  } catch {
+    // pgrep exits 1 when the process has no children.
+    children = []
+  }
+  return [pid, ...children.flatMap(processTree)]
+}
 
 /** The port Vite listens on when portless is bypassed with `PORTLESS=0`. */
 export const DIRECT_PORT = 5173
@@ -168,7 +210,8 @@ const EXPLORER_NOTICE_LINES = 20
 
 /**
  * Rewrites Vite's output for a person, so it names one address to open: it
- * drops Node's punycode deprecation notice and Vite's loopback addresses,
+ * drops Node's punycode deprecation notice, the inspector's port notice and
+ * Vite's loopback addresses,
  * shortens the list of routes for AI agents to the Local Explorer's address,
  * and once Vite is ready says where to open the app. The agents' list is
  * skipped for at most a few lines, so a change to its wording never hides
@@ -177,8 +220,9 @@ const EXPLORER_NOTICE_LINES = 20
 export function createOutputFilter(appOrigin: string): (line: string) => ReadonlyArray<string> {
   let explorerNoticeLeft = 0
   let skipDeprecationHint = false
+  let skipBlankLine = false
   return (line) => {
-    const plain = line.replace(/\x1b\[[0-9;]*m/g, '')
+    const plain = stripVTControlCharacters(line)
     if (plain.includes('detected this dev session is running in an AI agent')) {
       explorerNoticeLeft = EXPLORER_NOTICE_LINES
       return []
@@ -197,6 +241,15 @@ export function createOutputFilter(appOrigin: string): (line: string) => Readonl
       return []
     }
     skipDeprecationHint = false
+    // Another app's server has the debugger's usual port; this one takes the next.
+    if (plain.includes('Default inspector port')) {
+      skipBlankLine = true
+      return []
+    }
+    if (skipBlankLine) {
+      skipBlankLine = false
+      if (plain.trim() === '') return []
+    }
     if (/^\s*➜\s+(Local|Network|Debug):/.test(plain)) return []
     if (/VITE v\S+\s+ready in/.test(plain)) return [line, `  Open ${appOrigin} in your browser.`]
     return [line]
@@ -244,7 +297,10 @@ async function runDevelopmentServer(): Promise<number> {
   }
 
   // portless passes Ctrl-C on as SIGINT to Vite too; wait for it to stop.
-  process.on('SIGINT', () => {})
+  let interrupted = false
+  process.on('SIGINT', () => {
+    interrupted = true
+  })
 
   const vite = spawn('vite', [...createViteArguments(session)], {
     stdio: ['inherit', 'pipe', 'pipe'],
@@ -255,7 +311,16 @@ async function runDevelopmentServer(): Promise<number> {
   pipeLines(vite.stdout, filter, (text) => process.stdout.write(text))
   pipeLines(vite.stderr, filter, (text) => process.stderr.write(text))
 
-  return new Promise((resolve) => vite.on('exit', (code) => resolve(code ?? 0)))
+  return new Promise((resolve) =>
+    vite.on('exit', (code) => {
+      if (interrupted) return resolve(0)
+      // Stopping on its own, as after a laptop sleeps, leaves the browser on
+      // portless's 404 page, so say what to do.
+      if (code !== 0) console.error('\nThe dev server stopped. Run bun run dev to start it again.')
+      // A Vite ended by a signal has no exit code.
+      resolve(code ?? 1)
+    })
+  )
 }
 
 if (import.meta.main) {

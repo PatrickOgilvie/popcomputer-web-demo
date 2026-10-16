@@ -38,7 +38,8 @@ and reads it with `bound('project')`, after `authorize()`; add the table to
 
 Edit `src/schema.ts`, then run `bun run db:generate` for a new migration in
 `migrations/`, and `bun run db:migrate:local` to apply it locally; restarting
-`bun run dev` applies it too, since it applies new migrations as it starts. Never edit
+the app with `bun run stop` and `bun run dev` applies it too, since `bun run dev`
+applies new migrations as it starts. Never edit
 a migration that has been applied. Tests migrate each test's own D1 database
 from `migrations/`.
 
