@@ -11,6 +11,7 @@ import { env } from '../src/env'
 
 import {
   countAppliedMigrations,
+  describeLocalMigrations,
   createOutputFilter,
   createViteArguments,
   devVarsProblem,
@@ -169,6 +170,12 @@ describe('local migrations', () => {
 
   test('counts none when there was nothing to apply', () => {
     expect(countAppliedMigrations(upToDate)).toBe(0)
+  })
+
+  test('says the local database is up to date when nothing was applied', () => {
+    expect(describeLocalMigrations(0)).toBe('The local database is up to date.')
+    expect(describeLocalMigrations(1)).toBe('Applied 1 migration to the local database.')
+    expect(describeLocalMigrations(2)).toBe('Applied 2 migrations to the local database.')
   })
 })
 

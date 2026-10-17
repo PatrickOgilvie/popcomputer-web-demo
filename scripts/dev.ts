@@ -223,6 +223,13 @@ export function devVarsProblem(declaration: EnvDeclaration = env, devVarsPath = 
   ].join('\n')
 }
 
+/** What applying the local migrations did, so a restart shows it checked too. */
+export function describeLocalMigrations(applied: number): string {
+  return applied === 0
+    ? 'The local database is up to date.'
+    : `Applied ${applied} migration${applied === 1 ? '' : 's'} to the local database.`
+}
+
 /**
  * How many migrations wrangler's output says it applied: one ✅ in its status
  * table for each. Its "✅ No migrations to apply!" has no table, so counts none.
@@ -242,7 +249,7 @@ function applyLocalMigrations(): void {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
   const applied = countAppliedMigrations(output)
-  if (applied > 0) console.log(`Applied ${applied} migration${applied === 1 ? '' : 's'} to the local database.`)
+  console.log(describeLocalMigrations(applied))
 }
 
 /** Lines of the list of Local Explorer routes shown when an AI agent runs the server. */

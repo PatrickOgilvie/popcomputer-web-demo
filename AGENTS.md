@@ -2,8 +2,9 @@
 
 This application is built on `@popcomputer/web`. Follow
 `node_modules/@popcomputer/web/AGENTS.md`: its rules name the one API for each
-task, and its README (`node_modules/@popcomputer/web/README.md`) shows each
-in full. Where this file and those rules differ, the rules win.
+task, and its docs (`node_modules/@popcomputer/web/docs/`, one short file per
+task, which `docs/which-api.md` indexes) show each in full. Where this file and
+those rules differ, the rules win.
 
 ## Where things are declared
 
