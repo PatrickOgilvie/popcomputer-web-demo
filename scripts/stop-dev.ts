@@ -33,7 +33,9 @@ async function stopDevelopmentServer(): Promise<number> {
   const pid = readRunningDev()
   if (pid === undefined) {
     rmSync(DEV_PID_FILE, { force: true })
-    console.log("bun run dev isn't running for this app.")
+    // A `portless run` that crashed leaves its server answering with no
+    // record of it here; the next `bun run dev` stops that server.
+    console.log("bun run dev isn't running for this app. If its address still answers, a crashed session left its server running: run bun run dev, which stops that server and starts a new one, then bun run stop.")
     return 0
   }
 

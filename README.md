@@ -17,7 +17,8 @@ template, or deploy it as it is.
 // src/actions/projects.ts
 export const updateProject = action(
   Effect.gen(function* () {
-    const project = yield* ownProject
+    // Only its owner's: the binding is ownedBy 'userId', so another member's is a 404.
+    const project = yield* bound('project')
     const input = yield* validateRequest(ProjectForm)
     const updatedAt = DateTime.toDateUtc(yield* DateTime.now)
 
@@ -71,18 +72,16 @@ guarantees there.
   | `src/routes.ts` | Every route and the action that answers it. |
 
 - **An action reads its record from the URL** rather than querying for it,
-  and answers a record its visitor may not see as not found:
+  and its binding says who may load it, so no action checks: another
+  member's project is the 404 a missing one is, from the lookup's own query.
 
   ```ts
-  // src/actions/projects.ts
-  const ownProject = Effect.gen(function* () {
-    const auth = yield* authorize()
-    const project = yield* bound('project')
-
-    if (project.userId !== auth.user.id) return yield* notFound('Project')
-
-    return project
-  })
+  // src/app.ts
+  bindings: {
+    project: routeBinding(schema.projects, { ownedBy: 'userId' }),
+    publicProject: routeBinding(schema.projects, { publicWhen: { visibility: 'public' } }),
+    session: routeBinding(schema.session, { ownedBy: 'userId' }),
+  },
   ```
 
 - **A failed form goes back to its page** with its errors beside the fields,
@@ -125,7 +124,7 @@ below 24, though it runs on 22.
 3. Install portless, and have it start with your computer:
 
    ```bash
-   bun add -g portless@0.15.7
+   bun add -g portless@0.15.8
    portless service install
    ```
 

@@ -51,7 +51,7 @@
     "drizzle-kit": "^0.31.11",
     "miniflare": "4.20260730.0",
     "oxlint": "1.82.0",
-    "portless": "0.15.7",
+    "portless": "0.15.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^6.4.4",
