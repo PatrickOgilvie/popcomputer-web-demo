@@ -163,10 +163,12 @@ for looking at the local database, KV and traces, with an API for agents at
 `/cdn-cgi/local/explorer/api`. The app itself is at its address's other paths.
 
 Until you first deploy the app, `wrangler.jsonc` holds the template's names,
-so a build's `dist/popcomputer_web_demo` folder and
-`bun run db:migrate:local`'s `popcomputer-web-demo-db` show them;
+so a build's `dist/popcomputer_web_demo` folder shows them;
 `bun run deploy` gives the Worker and its database the app's name.
-`bun run dev` already uses the app's name.
+`bun run dev` already uses the app's name. The local database keeps its data
+through that first deploy, which writes the new database's id into
+`wrangler.jsonc`: `preview_database_id` names the local one `local`, whatever
+the id.
 
 If the address shows portless's "404 - Not Found" page, the app isn't running:
 start it with `bun run dev`, whatever command that page suggests.
@@ -288,7 +290,10 @@ With `--remote`, it runs on the database on Cloudflare, the live app's.
 A statement that only reads, such as a `SELECT`, runs straight away; one that
 could change data asks first, since `bun run rollback` won't undo it, and
 without a terminal it wants `--yes`. Put the statement in quotes, so the
-shell passes it whole.
+shell passes it whole. Wrangler's output calls the database on Cloudflare the
+"preview database" there, as it does when a deploy applies migrations,
+because `preview_database_id` is set; it's the live database all the same,
+with the id in brackets.
 
 ## Deploying
 

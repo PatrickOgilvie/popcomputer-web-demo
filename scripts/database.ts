@@ -300,14 +300,19 @@ async function execute(argv: ReadonlyArray<string>): Promise<Problem> {
   }
   const login = loginProblem('bun run db:execute')
   if (login !== undefined) return login
+  const database = readDatabaseName(config) ?? 'the database'
   if (!readsOnly(statement) && options.values.yes !== true) {
-    const database = readDatabaseName(config) ?? 'the database'
     const risk = `That statement can change the live app's data, in ${database} on Cloudflare, and bun run rollback won't undo it.`
     if (!canAsk()) {
       return `${risk} So bun run db:execute asks first, and there's no terminal here to ask in. Once you're sure, run it with --yes: bun run db:execute --remote --yes ${shellQuote(statement)}`
     }
     if (!(await askYesNo(`${risk} Run it?`))) return `Didn't run it: ${database} is as it was.`
   }
+  // wrangler labels any remote run "preview" once preview_database_id names the local database.
+  const label = /"preview_database_id"\s*:/.test(config)
+    ? ', though wrangler calls it the preview database, as wrangler.jsonc names the local one with preview_database_id'
+    : ''
+  console.log(`Running it on ${database}, the live app's database on Cloudflare${label}.`)
   return runStatement(statement, true)
 }
 

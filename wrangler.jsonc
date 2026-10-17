@@ -14,6 +14,12 @@
       "binding": "DB",
       "database_name": "popcomputer-web-demo-db",
       "database_id": "00000000-0000-0000-0000-000000000000",
+      // Names the local database bun run dev and the db: scripts share, so it
+      // keeps its data when the first deploy writes the real id above. It's
+      // why wrangler calls the database on Cloudflare the "preview database"
+      // when it migrates or queries it there: that's still the live one. To
+      // develop against the live one ("remote": true), set this to its id.
+      "preview_database_id": "local",
       "migrations_dir": "migrations"
     }
   ],

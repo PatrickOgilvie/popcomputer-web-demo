@@ -57,6 +57,11 @@ database on Cloudflare; a statement that could change data there stops and
 asks for `--yes`, which you pass only once the user has said to run that
 statement on the live data.
 
+`preview_database_id: "local"` in `wrangler.jsonc` names the local database,
+so its data survives the first deploy writing `database_id`; leave it. It
+makes wrangler label remote D1 runs "preview database", though they run on
+the live one.
+
 ## Deploying
 
 Deploy only when asked, with `bun run deploy`: it does everything, and is

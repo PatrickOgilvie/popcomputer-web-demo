@@ -74,6 +74,14 @@ describe('database', () => {
     expect(writeDatabaseId(config(id), '00000000-1111-2222-3333-444444444444')).toBe(config(id))
   })
 
+  test("reads and writes database_id only, leaving the local database's preview_database_id", () => {
+    const withLocal = (databaseId: string) =>
+      `{ "binding": "DB", "database_id": "${databaseId}", "preview_database_id": "${PLACEHOLDER_DATABASE_ID}" }`
+
+    expect(readDatabaseId(withLocal(PLACEHOLDER_DATABASE_ID))).toBeUndefined()
+    expect(writeDatabaseId(withLocal(PLACEHOLDER_DATABASE_ID), id)).toBe(withLocal(id))
+  })
+
   test('finds the database wrangler d1 list --json names', () => {
     const list = JSON.stringify(
       [
