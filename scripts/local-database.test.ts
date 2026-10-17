@@ -6,14 +6,19 @@ import { join, resolve } from 'node:path'
 
 import { getPlatformProxy } from 'wrangler'
 
-import { writeDatabaseId } from './cloudflare-database'
+import { PLACEHOLDER_DATABASE_ID, writeDatabaseId } from './cloudflare-database'
 
 // The project's own wrangler, run here only on a local database in the test's folder.
 const wrangler = resolve('node_modules', '.bin', 'wrangler')
 
-/** wrangler.jsonc as the template ships it, its paths made absolute to work from another folder. */
+/**
+ * wrangler.jsonc as the template ships it, its paths made absolute to work
+ * from another folder: an app deployed already has its real database's id
+ * there, so the placeholder goes back for the first deploy to replace.
+ */
 function shippedConfig(): string {
   return readFileSync('wrangler.jsonc', 'utf8')
+    .replace(/"database_id": "[^"]*"/, `"database_id": "${PLACEHOLDER_DATABASE_ID}"`)
     .replace('"main": "src/worker.ts"', `"main": ${JSON.stringify(resolve('src/worker.ts'))}`)
     .replace('"directory": "dist"', `"directory": ${JSON.stringify(resolve('dist'))}`)
     .replace('"migrations_dir": "migrations"', `"migrations_dir": ${JSON.stringify(resolve('migrations'))}`)
