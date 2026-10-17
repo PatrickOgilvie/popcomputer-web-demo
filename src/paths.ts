@@ -9,7 +9,7 @@ export const paths = {
   newProject: '/projects/create',
   project: '/projects/{project}',
   editProject: '/projects/{project}/edit',
-  publicProject: '/showcase/projects/{project}',
+  publicProject: '/showcase/projects/{publicProject}',
   sessions: '/sessions',
   otherSessions: '/sessions/others',
   session: '/sessions/{session}',

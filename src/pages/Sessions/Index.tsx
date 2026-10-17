@@ -188,7 +188,8 @@ const SessionsIndex: WebPage<'Sessions/Index'> = ({ sessions, errors }) => {
             Session tokens never reach the browser: the page’s schema in <code>src/pages.ts</code> names every column it sends.
           </Guarantee>
           <Guarantee>
-            Signing a device out binds the session from its URL, <code>bound('session')</code>, and another member’s session is a 404.
+            Signing a device out binds the session from its URL, <code>bound('session')</code>, whose binding is{' '}
+            <code>ownedBy: 'userId'</code>: another member’s session is a 404.
           </Guarantee>
           <Guarantee>Better Auth revokes the session, through its own handler and rate limits.</Guarantee>
         </UnderTheHood>

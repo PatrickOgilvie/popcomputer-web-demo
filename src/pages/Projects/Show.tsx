@@ -76,7 +76,7 @@ const ShowProject: WebPage<'Projects/Show'> = ({ project }) => {
   const [confirmsDelete, setConfirmsDelete] = useState(false)
   const projectPath = href(paths.project, { project: project.id })
   const editPath = href(paths.editProject, { project: project.id })
-  const showcasePath = href(paths.publicProject, { project: project.id })
+  const showcasePath = href(paths.publicProject, { publicProject: project.id })
   const isPublic = project.visibility === 'public'
 
   function handleDelete() {
@@ -223,7 +223,10 @@ const ShowProject: WebPage<'Projects/Show'> = ({ project }) => {
           <Guarantee>
             The route binds the project, <code>bound('project')</code>, so the action never queries for it.
           </Guarantee>
-          <Guarantee>A missing project and another member’s project both return the same 404.</Guarantee>
+          <Guarantee>
+            Its binding is <code>ownedBy: 'userId'</code>: another member’s project is the same 404 as a missing one,
+            from the lookup’s own query.
+          </Guarantee>
           <Guarantee>Deleting is scoped by the bound project and its owner.</Guarantee>
         </UnderTheHood>
       </Layout>

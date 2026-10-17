@@ -7,7 +7,6 @@ import {
   dbQuery,
   flash,
   invalid,
-  notFound,
   redirect,
   render,
 } from '@popcomputer/web/effect'
@@ -39,9 +38,9 @@ export const listSessions = action(
 export const revokeSession = action(
   Effect.gen(function* () {
     const auth = yield* authorize()
+    // Only the member's own sessions load: the binding is ownedBy 'userId'.
     const device = yield* bound('session')
 
-    if (device.userId !== auth.user.id) return yield* notFound('Session')
     if (device.id === auth.session.id) return yield* invalid({ session: 'Sign out to end the session you are using.' })
 
     yield* betterAuthCall('revokeSession', { body: { token: device.token } })

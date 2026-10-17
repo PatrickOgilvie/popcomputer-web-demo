@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { Schema as S, Struct } from 'effect'
 import { createTemplate, createVersion, setupWeb, vite } from '@popcomputer/web'
 import { betterAuthSession } from '@popcomputer/web/auth'
+import { routeBinding } from '@popcomputer/web/effect'
 import { tableSchema } from '@popcomputer/web/schema'
 import manifest from '../dist/client/manifest.json'
 import { createAuth } from './auth'
@@ -39,7 +40,13 @@ export const web = setupWeb(new Hono<Env>(), {
   ),
   database: (c) => createDb(c.env.DB),
   schema,
-  bindings: { project: schema.projects, session: schema.session },
+  // Each record a path names, and who may load it: another member's record
+  // is the 404 a missing one is, so no action has to check.
+  bindings: {
+    project: routeBinding(schema.projects, { ownedBy: 'userId' }),
+    publicProject: routeBinding(schema.projects, { publicWhen: { visibility: 'public' } }),
+    session: routeBinding(schema.session, { ownedBy: 'userId' }),
+  },
   pages,
   paths,
   auth: {

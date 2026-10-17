@@ -71,8 +71,8 @@ const EditProject: WebPage<'Projects/Edit'> = ({ project }) => {
 
           <UnderTheHood route="PUT /projects/{project}" action="updateProject" compact>
             <Guarantee>
-              <code>bound('project')</code> loads the project the path names, and another member's project is
-              a 404, so its existence stays private.
+              <code>bound('project')</code> loads the project the path names, and its binding is{' '}
+              <code>ownedBy: 'userId'</code>: another member's project is a 404, so its existence stays private.
             </Guarantee>
             <Guarantee>The update is scoped by the bound project and its owner.</Guarantee>
           </UnderTheHood>

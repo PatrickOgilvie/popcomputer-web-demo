@@ -7,7 +7,6 @@ import {
   dbMutation,
   dbQuery,
   flash,
-  notFound,
   redirect,
   render,
   validateRequest,
@@ -17,19 +16,6 @@ import { ProjectForm } from '../forms'
 import { ProjectSummary } from '../pages'
 import { paths } from '../paths'
 import { projects } from '../schema'
-
-/**
- * The signed-in member's project the path names. Another member's project is
- * not found, so its existence stays private.
- */
-const ownProject = Effect.gen(function* () {
-  const auth = yield* authorize()
-  const project = yield* bound('project')
-
-  if (project.userId !== auth.user.id) return yield* notFound('Project')
-
-  return project
-})
 
 export const listProjects = action(
   Effect.gen(function* () {
@@ -61,21 +47,24 @@ export const createProject = action(
   })
 )
 
+// `{project}` loads only the signed-in member's own project (its binding in
+// src/app.ts is ownedBy 'userId'): another member's is not found, so its
+// existence stays private.
 export const showProject = action(
   Effect.gen(function* () {
-    return yield* render('Projects/Show', { project: yield* ownProject })
+    return yield* render('Projects/Show', { project: yield* bound('project') })
   })
 )
 
 export const editProject = action(
   Effect.gen(function* () {
-    return yield* render('Projects/Edit', { project: yield* ownProject })
+    return yield* render('Projects/Edit', { project: yield* bound('project') })
   })
 )
 
 export const updateProject = action(
   Effect.gen(function* () {
-    const project = yield* ownProject
+    const project = yield* bound('project')
     const input = yield* validateRequest(ProjectForm)
     const updatedAt = DateTime.toDateUtc(yield* DateTime.now)
 
@@ -92,7 +81,7 @@ export const updateProject = action(
 
 export const deleteProject = action(
   Effect.gen(function* () {
-    const project = yield* ownProject
+    const project = yield* bound('project')
 
     yield* dbMutation((db) =>
       db.delete(projects).where(and(eq(projects.id, project.id), eq(projects.userId, project.userId)))
@@ -103,13 +92,12 @@ export const deleteProject = action(
   })
 )
 
-/** A project its owner made public, for anyone; a private one is not found. */
+/**
+ * A project its owner made public, for anyone: `{publicProject}` binds the
+ * same table with publicWhen, so a private one is not found.
+ */
 export const showPublicProject = action(
   Effect.gen(function* () {
-    const project = yield* bound('project')
-
-    if (project.visibility !== 'public') return yield* notFound('Project')
-
-    return yield* render('Projects/Public', { project })
+    return yield* render('Projects/Public', { project: yield* bound('publicProject') })
   })
 )

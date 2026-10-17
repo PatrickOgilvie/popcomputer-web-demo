@@ -61,9 +61,10 @@ const PublicProject: WebPage<'Projects/Public'> = ({ project }) => {
           </footer>
         </article>
 
-        <UnderTheHood route="GET /showcase/projects/{project}" action="showPublicProject">
+        <UnderTheHood route="GET /showcase/projects/{publicProject}" action="showPublicProject">
           <Guarantee>
-            The route binds the project, <code>bound('project')</code>, and a private one is the same 404 as a missing one.
+            The route binds the project as <code>{'{publicProject}'}</code>, whose binding is{' '}
+            <code>publicWhen: {"{ visibility: 'public' }"}</code>: a private one is the same 404 as a missing one.
           </Guarantee>
           <Guarantee>
             Rendered per request: a project made private or deleted disappears on the next visit.

@@ -94,7 +94,7 @@ const ProjectsIndex: WebPage<'Projects/Index'> = ({ projects }) => {
                   <div className="col-start-2 row-start-1 flex justify-end sm:col-start-auto sm:row-start-auto">
                     {project.visibility === 'public' ? (
                       <Link
-                        href={href(paths.publicProject, { project: project.id })}
+                        href={href(paths.publicProject, { publicProject: project.id })}
                         className={buttonClassName({ variant: 'ghost', size: 'sm', className: 'relative size-8 px-0' })}
                         aria-label={`Open the public page for ${project.name}`}
                       >

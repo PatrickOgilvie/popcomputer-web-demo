@@ -30,7 +30,7 @@ describe('a member’s projects', () => {
     const env = await freshEnv()
     const browser = await register(env, 'Ada')
     const id = await createProject(browser)
-    const publicPath = href(paths.publicProject, { project: id })
+    const publicPath = href(paths.publicProject, { publicProject: id })
     const guest = testBrowser(app, env)
 
     expect((await guest.request(publicPath, visit)).status).toBe(404)
@@ -61,7 +61,7 @@ describe('a member’s projects', () => {
     await browser.request(href(paths.project, { project: id }), send('DELETE'))
 
     expect((await browser.request(href(paths.project, { project: id }), visit)).status).toBe(404)
-    expect((await testBrowser(app, env).request(href(paths.publicProject, { project: id }), visit)).status).toBe(404)
+    expect((await testBrowser(app, env).request(href(paths.publicProject, { publicProject: id }), visit)).status).toBe(404)
   })
 
   test('the owner a form names is ignored: a project belongs to the member who made it', async () => {

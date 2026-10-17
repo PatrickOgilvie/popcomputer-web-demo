@@ -33,9 +33,24 @@ Each is declared once, and everything else derives from it:
    to `components` in `src/main.tsx`; a page without one is a type error.
 6. Test it in `test/` through the app, as the tests there do.
 
+The projects pages are an example to copy and learn from: a list, a form
+that creates, a page that shows, edits and deletes one, and a public page.
+Build what the user asks for beside them the same way, and remove them when
+the user no longer wants them.
+
 A route that reads a record names it in its path (`/projects/{project}`)
-and reads it with `bound('project')`, after `authorize()`; add the table to
-`bindings` in `src/app.ts`. Another member's record answers `notFound`.
+and reads it with `bound('project')`. Add its table to `bindings` in
+`src/app.ts` with who may load it, and never check that in the action:
+`routeBinding(schema.projects, { ownedBy: 'userId' })` for the signed-in
+member's own records, whose others are the 404 a missing record is;
+`{ publicWhen: { visibility: 'public' } }` for a page anyone may see, under
+a binding of its own (`publicProject` shows the table bound twice);
+`{ public: true }` for any record, to anyone. A record that lives inside
+another, such as a task in a project, goes under it in the path
+(`/projects/{project}/tasks/{task}`) and says
+`{ scope: { project: { foreignKey: 'projectId' } } }`, so it loads only under
+its project and the project's binding decides. The lint rule
+`require-binding-access` reports a binding that doesn't say.
 
 ## Changing the database
 
