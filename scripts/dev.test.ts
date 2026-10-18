@@ -24,6 +24,7 @@ import {
   processTree,
   readDevSession,
   readRunningDev,
+  watchStartup,
 } from './dev'
 
 describe('development session', () => {
@@ -286,5 +287,42 @@ describe('bun run stop', () => {
     } finally {
       for (const each of [...processTree(pid)].reverse()) process.kill(each, 'SIGKILL')
     }
+  })
+})
+
+describe('starting Vite', () => {
+  // As Vite printed it when the app had started importing better-auth/plugins.
+  const replaced = [
+    '\u001b[31merror when starting dev server:',
+    'Error: The file does not exist at "/app/node_modules/.vite/deps_my_app/chunk-UDRRTNQC.js?v=8dfaa4ed" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.',
+    '    at runInRunnerObject (workers/runner-worker/index.js:107:3)',
+    '    at getWorkerEntryExportTypes (workers/runner-worker/index.js:252:24)\u001b[39m',
+  ]
+
+  test('holds a start that a replaced dependency stopped, to start again in its place', () => {
+    const watch = watchStartup()
+    const shown = ['✨ new dependencies optimized: better-auth/plugins', ...replaced].flatMap(watch.see)
+
+    expect(shown).toEqual(['✨ new dependencies optimized: better-auth/plugins'])
+    expect(watch.held()).toEqual(replaced)
+    expect(watch.replacedDependency()).toBe(true)
+  })
+
+  test('holds any other failed start too, but only to show it', () => {
+    const watch = watchStartup()
+    const failure = ['error when starting dev server:', 'Error: Port 5173 is already in use']
+
+    expect(failure.flatMap(watch.see)).toEqual([])
+    expect(watch.held()).toEqual(failure)
+    expect(watch.replacedDependency()).toBe(false)
+  })
+
+  test('passes everything through once Vite is ready', () => {
+    const watch = watchStartup()
+    const lines = ['  VITE v6.4.4  ready in 2230 ms', ...replaced]
+
+    expect(lines.flatMap(watch.see)).toEqual(lines)
+    expect(watch.held()).toEqual([])
+    expect(watch.replacedDependency()).toBe(false)
   })
 })

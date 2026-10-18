@@ -318,6 +318,53 @@ export function createOutputFilter(appOrigin: string): (line: string) => Readonl
   }
 }
 
+/**
+ * Vite's report when the file of a dependency it had prepared is gone: its
+ * optimiser has just prepared them again, as when the app starts importing
+ * a package, or a part of one, that the last run never saw.
+ */
+export const REPLACED_DEPENDENCY = 'which is in the optimize deps directory'
+
+/** What Vite said while starting, read line by line. */
+export interface StartupWatch {
+  /** The lines to show now: a startup failure's are held until Vite exits. */
+  readonly see: (line: string) => ReadonlyArray<string>
+  /** The startup failure's lines, held back; none once Vite is ready. */
+  readonly held: () => ReadonlyArray<string>
+  /**
+   * Whether Vite stopped while starting because its optimiser replaced a
+   * dependency's files while the Worker was loading them, which a second
+   * start, finding them prepared, doesn't meet.
+   */
+  readonly replacedDependency: () => boolean
+}
+
+/**
+ * Watches Vite start. On a warm start Vite reuses the dependencies it
+ * prepared last time; one the app has started importing since is found only
+ * as the Cloudflare plugin first loads the Worker, and preparing it replaces
+ * the files that load was reading, so Vite stops with "error when starting
+ * dev server". This holds such a failure's lines back, so a restart can
+ * replace them with one sentence.
+ */
+export function watchStartup(): StartupWatch {
+  let ready = false
+  let failing = false
+  const held: Array<string> = []
+  return {
+    see(line) {
+      const plain = stripVTControlCharacters(line)
+      if (/VITE v\S+\s+ready in/.test(plain)) ready = true
+      if (!ready && plain.includes('error when starting dev server')) failing = true
+      if (!failing) return [line]
+      held.push(line)
+      return []
+    },
+    held: () => held,
+    replacedDependency: () => held.some((line) => stripVTControlCharacters(line).includes(REPLACED_DEPENDENCY)),
+  }
+}
+
 /** Passes each line a stream writes through the filter to `write`. */
 function pipeLines(
   stream: NodeJS.ReadableStream,
@@ -369,26 +416,36 @@ async function runDevelopmentServer(): Promise<number> {
     interrupted = true
   })
 
-  const vite = spawn('vite', [...createViteArguments(session)], {
-    stdio: ['inherit', 'pipe', 'pipe'],
-    // vite.config.ts gives the Worker these vars. Vite colours its output only
-    // for a terminal; the filter sits between them.
-    env: { ...process.env, ...serverVars, ...(process.stdout.isTTY ? { FORCE_COLOR: '1' } : {}) },
-  })
   const filter = createOutputFilter(session.appOrigin)
-  pipeLines(vite.stdout, filter, (text) => process.stdout.write(text))
-  pipeLines(vite.stderr, filter, (text) => process.stderr.write(text))
+  const start = (attempt: number): Promise<number> =>
+    new Promise((resolve) => {
+      const watch = watchStartup()
+      const vite = spawn('vite', [...createViteArguments(session)], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        // vite.config.ts gives the Worker these vars. Vite colours its output only
+        // for a terminal; the filter sits between them.
+        env: { ...process.env, ...serverVars, ...(process.stdout.isTTY ? { FORCE_COLOR: '1' } : {}) },
+      })
+      pipeLines(vite.stdout, (line) => watch.see(line).flatMap(filter), (text) => process.stdout.write(text))
+      pipeLines(vite.stderr, (line) => watch.see(line).flatMap(filter), (text) => process.stderr.write(text))
 
-  return new Promise((resolve) =>
-    vite.on('exit', (code) => {
-      if (interrupted) return resolve(0)
-      // Stopping on its own, as after a laptop sleeps, leaves the browser on
-      // portless's 404 page, so say what to do.
-      if (code !== 0) console.error('\nThe dev server stopped. Run bun run dev to start it again.')
-      // A Vite ended by a signal has no exit code.
-      resolve(code ?? 1)
+      // `close` follows the last line of output, where `exit` can come first.
+      vite.on('close', (code) => {
+        if (interrupted) return resolve(0)
+        if (code !== 0 && attempt === 0 && watch.replacedDependency()) {
+          console.log('Vite prepared a dependency the app has started importing, and starts again to use it.')
+          return resolve(start(attempt + 1))
+        }
+        for (const line of watch.held().flatMap(filter)) process.stderr.write(`${line}\n`)
+        // Stopping on its own, as after a laptop sleeps, leaves the browser on
+        // portless's 404 page, so say what to do.
+        if (code !== 0) console.error('\nThe dev server stopped. Run bun run dev to start it again.')
+        // A Vite ended by a signal has no exit code.
+        resolve(code ?? 1)
+      })
     })
-  )
+
+  return start(0)
 }
 
 if (import.meta.main) {
