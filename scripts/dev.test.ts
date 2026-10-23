@@ -14,6 +14,7 @@ import {
   describeLocalMigrations,
   createOutputFilter,
   createViteArguments,
+  devServerVars,
   devVarsProblem,
   DIRECT_PORT,
   ensureDevVars,
@@ -37,6 +38,13 @@ describe('development session', () => {
     const session = readDevSession({ PORT: '4999', PORTLESS_URL: 'http://fix-ui.reading-list.localhost:1355' })
 
     expect(session.appOrigin).toBe('http://fix-ui.reading-list.localhost:1355')
+  })
+
+  test("gives the Worker the address it's served at as APP_URL, so emailed links come back to it", () => {
+    expect(devServerVars(readDevSession({ PORT: '4123', PORTLESS_URL: 'https://reading-list.localhost' }))).toEqual({
+      APP_URL: 'https://reading-list.localhost',
+    })
+    expect(devServerVars(readDevSession({}))).toEqual({ APP_URL: `http://localhost:${DIRECT_PORT}` })
   })
 
   test('falls back to one fixed port when portless is bypassed', () => {
@@ -97,7 +105,7 @@ describe("the Worker's vars and secrets", () => {
     const path = join(mkdtempSync(join(tmpdir(), 'dev-vars-')), '.dev.vars')
     ensureDevVars(undefined, path)
 
-    expect(devVarsProblem(undefined, path)).toBeUndefined()
+    expect(devVarsProblem(undefined, path, { APP_URL: 'https://reading-list.localhost' })).toBeUndefined()
   })
 
   test('stops, naming what to add, when a secret nobody generates is missing', () => {
@@ -105,7 +113,7 @@ describe("the Worker's vars and secrets", () => {
     writeFileSync(path, 'BETTER_AUTH_SECRET=a-secret-of-thirty-two-characters-or-more\n')
     const declaration = defineEnv({ ...env.entries, RESEND_API_KEY: secret(S.String) })
 
-    expect(devVarsProblem(declaration, path)).toBe(
+    expect(devVarsProblem(declaration, path, { APP_URL: 'https://reading-list.localhost' })).toBe(
       [
         "The app can't start without what src/env.ts says it needs:",
         '- The secret RESEND_API_KEY is missing from .dev.vars. Add a line RESEND_API_KEY=its value there.',

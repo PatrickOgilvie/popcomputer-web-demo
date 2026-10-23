@@ -3,6 +3,7 @@ import { createInertiaApp } from '@inertiajs/react'
 import type { PageName } from '@popcomputer/web/effect'
 import type { WebPage } from '@popcomputer/web/react'
 import { createRoot } from 'react-dom/client'
+import CheckEmail from './pages/Auth/CheckEmail'
 import Login from './pages/Auth/Login'
 import Register from './pages/Auth/Register'
 import Dashboard from './pages/Dashboard'
@@ -19,6 +20,7 @@ import { appTitle } from './title'
 const components: { readonly [Name in PageName]: WebPage<Name> } = {
   'Auth/Login': Login,
   'Auth/Register': Register,
+  'Auth/CheckEmail': CheckEmail,
   Dashboard,
   'Projects/Index': ProjectsIndex,
   'Projects/Create': CreateProject,

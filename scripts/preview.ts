@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 
 import { env } from '../src/env'
 import { nameApp } from './app-name'
+import { appUrlProblem } from './app-url'
 import { readDatabaseId } from './cloudflare-database'
 import { capture, failure, runStep } from './command'
 import { loginProblem, schemaProblem } from './deploy'
@@ -67,11 +68,12 @@ async function preview(): Promise<number> {
   const before = [
     () => schemaProblem(RERUN),
     () => loginProblem(RERUN),
+    () => appUrlProblem(RERUN),
     deployedProblem,
     () => runStep('bun', ['run', 'build'], 'The build failed; it says why above.'),
   ]
   for (const step of before) {
-    const problem = step()
+    const problem = await step()
     if (problem !== undefined) {
       console.error(problem)
       return 1

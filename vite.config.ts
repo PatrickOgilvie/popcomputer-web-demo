@@ -14,13 +14,19 @@ export default defineConfig(({ command, isPreview }) => ({
     // Runs the Worker inside Vite's dev server, so the pages and their scripts
     // share one address. Only the dev server runs it in development; a build
     // keeps wrangler.jsonc's production vars. In development the Worker takes
-    // the app's name, so two apps made from the template can run at once.
+    // the app's name, so two apps made from the template can run at once, and
+    // its APP_URL is the address `bun run dev` serves it at; .dev.vars can
+    // set another.
     cloudflare(
       command === 'serve' && isPreview !== true
         ? {
             config: (worker) => ({
               name: cloudflareName(packageJson.name),
-              vars: { ...worker.vars, ENVIRONMENT: 'development' },
+              vars: {
+                ...worker.vars,
+                ENVIRONMENT: 'development',
+                ...(process.env.APP_URL === undefined ? {} : { APP_URL: process.env.APP_URL }),
+              },
             }),
           }
         : {}

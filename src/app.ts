@@ -7,6 +7,7 @@ import { tableSchema } from '@popcomputer/web/schema'
 import manifest from '../dist/client/manifest.json'
 import { createAuth } from './auth'
 import { createDb } from './db'
+import { sendEmail } from './email'
 import { env, type Env } from './env'
 import { pages } from './pages'
 import { paths } from './paths'
@@ -54,7 +55,8 @@ export const web = setupWeb(new Hono<Env>(), {
       createAuth({
         db,
         secret: c.env.BETTER_AUTH_SECRET,
-        baseURL: new URL(c.req.url).origin,
+        baseURL: c.env.APP_URL,
+        sendEmail: (email) => sendEmail(c.env, email),
         advanced: { backgroundTasks },
         // The tests sign in with wrong passwords on purpose, and Better Auth
         // warns at each one.

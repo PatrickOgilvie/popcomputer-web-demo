@@ -9,8 +9,10 @@ import type { EnvDeclaration } from '@popcomputer/web/env'
 import drizzleConfig from '../drizzle.config'
 import { env } from '../src/env'
 import { nameApp, readDatabaseName } from './app-name'
+import { appUrlProblem } from './app-url'
 import { createDatabase, findDatabaseId, readDatabaseId, writeDatabaseId } from './cloudflare-database'
 import { capture, failure, parseJson, runStep, runWrangler } from './command'
+import { EMAIL_OFF, readEmailSetup } from './email'
 import { checkRemote, generatorOf, readSecretNames, readWranglerVars } from './env'
 import { countMigrations } from './migrations'
 import {
@@ -191,6 +193,16 @@ export function envProblem(
 }
 
 /**
+ * Stops, before anything reaches Cloudflare, when wrangler.jsonc turns
+ * Email Sending half on, and says so when it's off, as the template leaves it.
+ */
+function emailProblem(path = 'wrangler.jsonc'): string | undefined {
+  const setup = readEmailSetup(readFileSync(path, 'utf8'))
+  if (setup === 'off') console.log(EMAIL_OFF)
+  return typeof setup === 'object' ? `${setup.problem} Then run ${RERUN} again.` : undefined
+}
+
+/**
  * The workers.dev address `wrangler deploy` reports among its events: the
  * deploy's lists what it serves, and only workers.dev addresses start https://.
  */
@@ -312,10 +324,11 @@ export async function deployStaged(check?: CheckOptions): Promise<string | undef
 
 /**
  * Deploys the app, and is safe to run again at any time. Each run checks the
- * schema has its migrations, wrangler is signed in and the Worker has every
- * secret src/env.ts says it needs, creates only what the app doesn't have yet
- * on Cloudflare, then builds, migrates and deploys: a new version goes live
- * only once it answers at its own address.
+ * schema has its migrations, wrangler is signed in, wrangler.jsonc names the
+ * app's address and turns email on whole or not at all, and the Worker has
+ * every secret src/env.ts says it needs, creates only what the app doesn't
+ * have yet on Cloudflare, then builds, migrates and deploys: a new version
+ * goes live only once it answers at its own address.
  */
 async function deploy(): Promise<number> {
   const name = nameApp()
@@ -325,6 +338,8 @@ async function deploy(): Promise<number> {
   const steps: ReadonlyArray<() => string | undefined | Promise<string | undefined>> = [
     () => schemaProblem(RERUN),
     () => loginProblem(RERUN),
+    () => appUrlProblem(RERUN),
+    () => emailProblem(),
     () =>
       envProblem(() => {
         newWorker = true

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { env } from '../src/env'
 import { capture, failure } from './command'
 import { loginProblem } from './deploy'
+import { devServerVars, readDevSession } from './dev'
+import { EMAIL_OFF, readEmailSetup } from './email'
 import { checkLocal, checkRemote, readDevVars, readSecretNames, readWranglerVars, type EnvReport } from './env'
 
 /** Prints what a check found, and returns the exit code: 1 when something must be fixed first. */
@@ -23,10 +25,14 @@ function report(result: EnvReport, notReady: string, ready: string, generates: (
  * `wrangler.jsonc`'s vars.
  */
 function checkEnvironment(remote: boolean): number {
-  const wranglerVars = readWranglerVars(readFileSync('wrangler.jsonc', 'utf8'))
+  const config = readFileSync('wrangler.jsonc', 'utf8')
+  const wranglerVars = readWranglerVars(config)
+  const email = readEmailSetup(config)
+  const withEmail = (result: EnvReport): EnvReport =>
+    typeof email === 'object' ? { ...result, problems: [...result.problems, email.problem] } : result
   if (!remote) {
     return report(
-      checkLocal(env, wranglerVars, readDevVars()),
+      withEmail(checkLocal(env, wranglerVars, readDevVars(), devServerVars(readDevSession({})))),
       "Not ready for bun run dev: src/env.ts says the Worker needs what's below.",
       'Ready for bun run dev.',
       (name) => `${name} isn't in .dev.vars yet; bun run dev writes a new one when it starts.`
@@ -44,8 +50,13 @@ function checkEnvironment(remote: boolean): number {
     console.error(failure(list, "Could not list the Worker's secrets; wrangler says why above."))
     return 1
   }
+  const result = checkRemote(env, wranglerVars, secrets === 'no-worker' ? new Set() : secrets)
+  if (email === 'off') console.log(EMAIL_OFF)
+  for (const name of result.written) {
+    console.log(`${name} isn't in wrangler.jsonc's vars yet; bun run deploy writes the app's workers.dev address there.`)
+  }
   return report(
-    checkRemote(env, wranglerVars, secrets === 'no-worker' ? new Set() : secrets),
+    withEmail(result),
     "Not ready to deploy: src/env.ts says the Worker needs what's below.",
     "Ready to deploy. Cloudflare never shows a secret's value, so this checks each one is set, not what it holds.",
     (name) => `${name} isn't on Cloudflare yet; bun run deploy uploads a new one.`

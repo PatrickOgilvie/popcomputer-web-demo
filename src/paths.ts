@@ -4,6 +4,8 @@ export const paths = {
   dashboard: '/',
   login: '/login',
   register: '/register',
+  checkEmail: '/register/check-email',
+  verifyEmail: '/verify-email',
   logout: '/logout',
   projects: '/projects',
   newProject: '/projects/create',

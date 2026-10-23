@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react'
+import { Link, usePage } from '@inertiajs/react'
 import { FolderKanban, Globe, MonitorSmartphone } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -49,6 +49,7 @@ export default function AuthShell({
   children,
 }: AuthShellProps) {
   const { mainRef, announcement } = usePageTransitionFocus()
+  const page = usePage()
 
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,32rem)]">
@@ -74,6 +75,14 @@ export default function AuthShell({
           <p className="mt-2 text-sm text-pretty text-zinc-600 dark:text-zinc-400">
             {description}
           </p>
+          {page.flash.success ? (
+            <p
+              role="status"
+              className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+            >
+              {page.flash.success}
+            </p>
+          ) : null}
           <div className="mt-8">{children}</div>
           <p className="mt-8 text-sm text-zinc-600 dark:text-zinc-400">
             {alternatePrompt}{' '}

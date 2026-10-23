@@ -53,19 +53,20 @@ function secretsInVars(env: EnvDeclaration, wranglerVars: Readonly<Record<string
 }
 
 /**
- * Checks what `bun run dev` gives the Worker: `wrangler.jsonc`'s vars, with
- * `.dev.vars` over them. A secret still holding the example's placeholder is
- * missing, and a missing one src/env.ts can generate is left for
- * `bun run dev` to write.
+ * Checks what `bun run dev` gives the Worker: `wrangler.jsonc`'s vars, then
+ * the vars `bun run dev` sets itself, such as APP_URL, with `.dev.vars` over
+ * both. A secret still holding the example's placeholder is missing, and a
+ * missing one src/env.ts can generate is left for `bun run dev` to write.
  */
 export function checkLocal(
   env: EnvDeclaration,
   wranglerVars: Readonly<Record<string, unknown>>,
-  devVars: Readonly<Record<string, string>>
+  devVars: Readonly<Record<string, string>>,
+  devServerVars: Readonly<Record<string, string>> = {}
 ): EnvReport {
   const problems = [...secretsInVars(env, wranglerVars)]
   const generated: Array<string> = []
-  const values: Record<string, unknown> = { ...wranglerVars, ...devVars }
+  const values: Record<string, unknown> = { ...wranglerVars, ...devServerVars, ...devVars }
   const placeholders = new Set(secretNames(env).filter((name) => isPlaceholder(devVars[name] ?? '')))
   for (const name of placeholders) delete values[name]
 
@@ -93,19 +94,27 @@ function localAdvice(problem: EnvProblem, placeholder: boolean, inDevVars: boole
     : `The secret ${name} is missing from .dev.vars. Add a line ${name}=its value there.`
 }
 
+/** What a check of a deploy found: also the vars `bun run deploy` writes into `wrangler.jsonc` itself. */
+export interface RemoteEnvReport extends EnvReport {
+  /** Missing vars `bun run deploy` writes, such as APP_URL, the app's workers.dev address. */
+  readonly written: ReadonlyArray<string>
+}
+
 /**
  * Checks what a deploy gives the Worker: the secrets on Cloudflare, by name,
  * since Cloudflare never shows their values, and `wrangler.jsonc`'s vars. A
  * missing secret src/env.ts can generate is left for `bun run deploy` to
- * upload.
+ * upload, and a missing var it writes, `deployWrites`, for it to write.
  */
 export function checkRemote(
   env: EnvDeclaration,
   wranglerVars: Readonly<Record<string, unknown>>,
-  uploaded: ReadonlySet<string>
-): EnvReport {
+  uploaded: ReadonlySet<string>,
+  deployWrites: ReadonlySet<string> = new Set(['APP_URL'])
+): RemoteEnvReport {
   const problems = [...secretsInVars(env, wranglerVars)]
   const generated: Array<string> = []
+  const written: Array<string> = []
 
   for (const [name, entry] of Object.entries(env.entries)) {
     if (entry.kind !== 'secret' || entry.optional || uploaded.has(name)) continue
@@ -117,13 +126,17 @@ export function checkRemote(
     Object.fromEntries(Object.entries(env.entries).filter(([, entry]) => entry.kind === 'variable'))
   )
   for (const problem of checkEnv(variables, wranglerVars)) {
-    problems.push(
-      problem.problem === 'missing'
-        ? `The variable ${problem.name} isn't in wrangler.jsonc's vars. Add it there.`
-        : `${describeEnvProblem(problem)} Change it in wrangler.jsonc's vars.`
-    )
+    if (problem.problem === 'missing' && deployWrites.has(problem.name)) {
+      written.push(problem.name)
+    } else {
+      problems.push(
+        problem.problem === 'missing'
+          ? `The variable ${problem.name} isn't in wrangler.jsonc's vars. Add it there.`
+          : `${describeEnvProblem(problem)} Change it in wrangler.jsonc's vars.`
+      )
+    }
   }
-  return { problems, generated }
+  return { problems, generated, written }
 }
 
 /** How src/env.ts makes a value for a secret, if it does. */

@@ -23,6 +23,8 @@ export const Session = tableSchema(schema.session).mapFields((fields) => ({
 export const pages = {
   'Auth/Login': S.Struct({}),
   'Auth/Register': S.Struct({}),
+  // Whether the link was emailed, or written to the log for want of Email Sending.
+  'Auth/CheckEmail': S.Struct({ sendsEmail: S.Boolean }),
   Dashboard: S.Struct({
     recentProjects: S.Array(ProjectSummary),
     projectCount: S.Number,

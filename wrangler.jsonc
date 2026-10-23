@@ -32,5 +32,9 @@
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // Clears the counts of failed sign-ins whose window has passed.
   "triggers": { "crons": ["0 3 * * *"] },
+  // bun run deploy adds APP_URL here the first time: the Worker's workers.dev
+  // address, which emailed links name. Sending email is off until this file
+  // has "send_email": [{ "name": "EMAIL" }] and EMAIL_FROM in vars, which need
+  // Workers Paid and a domain on Cloudflare: the README's "Sending email".
   "vars": { "ENVIRONMENT": "production" }
 }

@@ -16,7 +16,8 @@ Each is declared once, and everything else derives from it:
   in React too (`FormInput<typeof ProjectForm>`).
 - `src/pages.ts`: each page's props, taken from the tables' columns.
 - `src/env.ts`: the Worker's vars and secrets, each with its schema; the
-  bindings type derives from it.
+  bindings type derives from it. `APP_URL` is the origin emailed links name,
+  never the request's URL.
 - `src/app.ts`: `setupWeb`, which owns rendering, D1, auth and route binding.
 - `src/routes.ts`: every route, with the action that answers it.
 - `src/actions/`: the actions. `src/pages/`: the React pages, each listed in
@@ -98,6 +99,17 @@ the live one.
 `bun run env:check` checks `.dev.vars` and the vars, and
 `bun run env:check --remote` checks the secrets on Cloudflare, by name.
 
+## Accounts and email
+
+Signing up emails a link that confirms the address (`paths.verifyEmail`),
+and only then does the password sign in; Better Auth's options are in
+`src/auth.ts`. The template sends no email: `src/email.ts` writes each one
+to the log until `wrangler.jsonc` has the `send_email` binding `EMAIL` and
+`EMAIL_FROM` in vars. Cloudflare Email Sending needs Workers Paid and a
+domain on Cloudflare, so turn it on only when the user asks, as the README's
+"Sending email" says. In tests, `freshEnv()` gives `EMAIL` a `TestMailbox`,
+`emailedLink(env, address)` reads the link, and `register()` follows it.
+
 ## Deploying
 
 Deploy only when asked, with `bun run deploy`: it does everything, and is
@@ -105,8 +117,10 @@ safe to run again. It stops, saying why, when `src/schema.ts` has a change
 with no migration (run `bun run db:generate`), when Wrangler isn't signed in
 to Cloudflare (`bun run cloudflare:login` opens the user's browser to allow
 it), or when the Worker lacks a secret `src/env.ts` needs that nothing
-generates (`bun run secret NAME`, with the user's value). It uploads the new
-version beside the live one, and makes it live only once its `/login`
+generates (`bun run secret NAME`, with the user's value). The first deploy
+writes the Worker's `workers.dev` address into `wrangler.jsonc` as `APP_URL`;
+commit it, or set the app's own domain there. It uploads the new version
+beside the live one, and makes it live only once its `/login`
 answers 200 at the version's own address; it ends by printing the app's
 address. When the check fails, the live version is unchanged and the output
 names the address and what it answered: fetch that address to see the

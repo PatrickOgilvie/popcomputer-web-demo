@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react'
+import { Head, useForm, usePage } from '@inertiajs/react'
 import type { FormInput } from '@popcomputer/web/react'
 import { useEffect, useRef } from 'react'
 import type { FormEvent } from 'react'
@@ -15,6 +15,8 @@ export default function Login() {
     password: '',
   })
   const formRef = useRef<HTMLFormElement>(null)
+  // An emailed link that expired, or was used already, lands here with ?error=.
+  const linkExpired = new URL(usePage().url, 'http://localhost').searchParams.get('error') === 'link_expired'
 
   useEffect(() => {
     if (Object.keys(errors).length === 0) return
@@ -40,6 +42,15 @@ export default function Login() {
         route="POST /login"
         action="signIn"
       >
+        {linkExpired ? (
+          <p
+            role="alert"
+            className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-pretty text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
+          >
+            That link has expired, or was used already. Sign in: if your address isn’t confirmed yet, we’ll send you a
+            new link.
+          </p>
+        ) : null}
         <form ref={formRef} className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <TextField
             id="email"

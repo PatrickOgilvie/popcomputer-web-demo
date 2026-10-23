@@ -1,7 +1,8 @@
+import { eq } from 'drizzle-orm'
 import { createAuth } from './auth'
 import type { Database } from './db'
 import type { Bindings } from './env'
-import { projects } from './schema'
+import { projects, user } from './schema'
 
 /** The member `bun run db:seed` creates, to sign in as locally. */
 export const seedMember = {
@@ -17,13 +18,15 @@ export const seedMember = {
  * and its inserts are typed by src/schema.ts like the app's own.
  */
 export async function seed(db: Database, env: Bindings): Promise<void> {
-  // Through Better Auth, as the sign-up form does, so the password signs in.
-  const auth = createAuth({ db, secret: env.BETTER_AUTH_SECRET, baseURL: 'http://localhost' })
-  const { user } = await auth.api.signUpEmail({ body: { ...seedMember } })
+  // Through Better Auth, as the sign-up form does, so the password signs in,
+  // with the address confirmed rather than a link emailed to prove it.
+  const auth = createAuth({ db, secret: env.BETTER_AUTH_SECRET, baseURL: 'http://localhost', sendEmail: async () => {} })
+  const { user: member } = await auth.api.signUpEmail({ body: { ...seedMember } })
+  await db.update(user).set({ emailVerified: true }).where(eq(user.id, member.id))
 
   await db.insert(projects).values([
-    { userId: user.id, name: 'Apollo', description: 'A private project: only Ada sees it.' },
-    { userId: user.id, name: 'Gemini', description: 'A public project: anyone with its link can read it.', visibility: 'public' },
+    { userId: member.id, name: 'Apollo', description: 'A private project: only Ada sees it.' },
+    { userId: member.id, name: 'Gemini', description: 'A public project: anyone with its link can read it.', visibility: 'public' },
   ])
   console.log(`Sign in as ${seedMember.email}, with the password "${seedMember.password}".`)
 }

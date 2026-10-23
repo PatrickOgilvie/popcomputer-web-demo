@@ -41,10 +41,11 @@ describe("the template's declaration", () => {
     expect(secrets.map(([name]) => name).filter((name) => !Object.hasOwn(example, name))).toEqual([])
   })
 
-  test("sets its vars in wrangler.jsonc, as a deploy needs them", () => {
+  test("sets its vars in wrangler.jsonc, as a deploy needs them, but APP_URL, which the first deploy writes", () => {
     expect(checkRemote(env, readWranglerVars(readFileSync('wrangler.jsonc', 'utf8')), new Set(['BETTER_AUTH_SECRET']))).toEqual({
       problems: [],
       generated: [],
+      written: ['APP_URL'],
     })
   })
 })
@@ -110,6 +111,15 @@ describe('local check', () => {
     expect(checkLocal(mailing, { ENVIRONMENT: 'staging' }, devVars).problems).toEqual([])
   })
 
+  test("takes the vars bun run dev sets itself, with .dev.vars over them", () => {
+    const devServer = { APP_URL: 'https://book-club.localhost' }
+
+    expect(checkLocal(env, production, { BETTER_AUTH_SECRET: authSecret }, devServer).problems).toEqual([])
+    expect(checkLocal(env, production, { BETTER_AUTH_SECRET: authSecret, APP_URL: 'tunnel.example' }, devServer).problems).toEqual([
+      'The variable APP_URL is invalid: Expected an origin, such as https://app.example.com, with no path or trailing slash. Change it in .dev.vars.',
+    ])
+  })
+
   test('says where a missing var goes', () => {
     expect(checkLocal(mailing, {}, { BETTER_AUTH_SECRET: authSecret, RESEND_API_KEY: 're_123' }).problems).toEqual([
       'The variable ENVIRONMENT is missing. Set it in vars in wrangler.jsonc, or in .dev.vars for this computer only.',
@@ -130,6 +140,7 @@ describe('remote check', () => {
     expect(checkRemote(mailing, production, new Set(['BETTER_AUTH_SECRET', 'RESEND_API_KEY']))).toEqual({
       problems: [],
       generated: [],
+      written: [],
     })
   })
 
@@ -137,6 +148,20 @@ describe('remote check', () => {
     expect(checkRemote(mailing, production, new Set())).toEqual({
       problems: ["The secret RESEND_API_KEY isn't set on Cloudflare. Run bun run secret RESEND_API_KEY to set it."],
       generated: ['BETTER_AUTH_SECRET'],
+      written: [],
+    })
+  })
+
+  test('leaves a missing APP_URL to the deploy, which writes it, and refuses one that names more than an origin', () => {
+    const uploaded = new Set(['BETTER_AUTH_SECRET'])
+
+    expect(checkRemote(env, production, uploaded)).toEqual({ problems: [], generated: [], written: ['APP_URL'] })
+    expect(checkRemote(env, { ...production, APP_URL: 'https://book-club.ada.workers.dev/' }, uploaded)).toEqual({
+      problems: [
+        "The variable APP_URL is invalid: Expected an origin, such as https://app.example.com, with no path or trailing slash. Change it in wrangler.jsonc's vars.",
+      ],
+      generated: [],
+      written: [],
     })
   })
 

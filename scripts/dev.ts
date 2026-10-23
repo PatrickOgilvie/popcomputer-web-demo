@@ -117,6 +117,14 @@ export function readDevSession(environment: PortlessProcessEnvironment): DevSess
   return { mode: 'portless', port: readPortlessPort(environment.PORT), appOrigin: url.origin }
 }
 
+/**
+ * The vars `bun run dev` gives the Worker itself, under `.dev.vars`: the
+ * address it serves the app at, as APP_URL, so emailed links come back to it.
+ */
+export function devServerVars(session: DevSession): Readonly<Record<string, string>> {
+  return { APP_URL: session.appOrigin }
+}
+
 /** Vite's arguments: the assigned port on loopback under portless, or the fixed one. */
 export function createViteArguments(session: DevSession): ReadonlyArray<string> {
   return session.mode === 'portless'
@@ -209,12 +217,17 @@ export function describeDevVarsUpdate(update: DevVarsUpdate): string | undefined
 }
 
 /**
- * Why the Worker can't start with `.dev.vars` and `wrangler.jsonc`'s vars,
- * if it can't: what src/env.ts says it needs and they don't hold.
+ * Why the Worker can't start with `.dev.vars`, `wrangler.jsonc`'s vars and
+ * those `bun run dev` sets, if it can't: what src/env.ts says it needs and
+ * they don't hold.
  */
-export function devVarsProblem(declaration: EnvDeclaration = env, devVarsPath = '.dev.vars'): string | undefined {
+export function devVarsProblem(
+  declaration: EnvDeclaration = env,
+  devVarsPath = '.dev.vars',
+  serverVars: Readonly<Record<string, string>> = {}
+): string | undefined {
   const wranglerVars = readWranglerVars(readFileSync('wrangler.jsonc', 'utf8'))
-  const { problems } = checkLocal(declaration, wranglerVars, readDevVars(devVarsPath))
+  const { problems } = checkLocal(declaration, wranglerVars, readDevVars(devVarsPath), serverVars)
   if (problems.length === 0) return undefined
   return [
     "The app can't start without what src/env.ts says it needs:",
@@ -323,9 +336,21 @@ async function runDevelopmentServer(): Promise<number> {
     return 1
   }
 
+  let session: DevSession
+  try {
+    session = readDevSession({ PORT: process.env.PORT, PORTLESS_URL: process.env.PORTLESS_URL })
+  } catch (cause: unknown) {
+    if (cause instanceof InvalidPortlessPort || cause instanceof InvalidPortlessUrl) {
+      console.error(cause.message)
+      return 1
+    }
+    throw cause
+  }
+
   const devVars = describeDevVarsUpdate(ensureDevVars())
   if (devVars !== undefined) console.log(devVars)
-  const envProblem = devVarsProblem()
+  const serverVars = devServerVars(session)
+  const envProblem = devVarsProblem(env, '.dev.vars', serverVars)
   if (envProblem !== undefined) {
     console.error(envProblem)
     return 1
@@ -338,17 +363,6 @@ async function runDevelopmentServer(): Promise<number> {
     return 1
   }
 
-  let session: DevSession
-  try {
-    session = readDevSession({ PORT: process.env.PORT, PORTLESS_URL: process.env.PORTLESS_URL })
-  } catch (cause: unknown) {
-    if (cause instanceof InvalidPortlessPort || cause instanceof InvalidPortlessUrl) {
-      console.error(cause.message)
-      return 1
-    }
-    throw cause
-  }
-
   // portless passes Ctrl-C on as SIGINT to Vite too; wait for it to stop.
   let interrupted = false
   process.on('SIGINT', () => {
@@ -357,8 +371,9 @@ async function runDevelopmentServer(): Promise<number> {
 
   const vite = spawn('vite', [...createViteArguments(session)], {
     stdio: ['inherit', 'pipe', 'pipe'],
-    // Vite colours its output only for a terminal; the filter sits between them.
-    env: process.stdout.isTTY ? { ...process.env, FORCE_COLOR: '1' } : process.env,
+    // vite.config.ts gives the Worker these vars. Vite colours its output only
+    // for a terminal; the filter sits between them.
+    env: { ...process.env, ...serverVars, ...(process.stdout.isTTY ? { FORCE_COLOR: '1' } : {}) },
   })
   const filter = createOutputFilter(session.appOrigin)
   pipeLines(vite.stdout, filter, (text) => process.stdout.write(text))
