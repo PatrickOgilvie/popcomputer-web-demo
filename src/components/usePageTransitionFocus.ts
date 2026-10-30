@@ -1,18 +1,19 @@
 import { usePage } from '@inertiajs/react'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 
-let previousPath: string | undefined
+import { PreviousPath } from '~/components/PageTransitions'
 
 /** Moves focus and announces the destination after client-side page navigation. */
 export default function usePageTransitionFocus() {
   const { url } = usePage()
+  const previousPath = useContext(PreviousPath)
   const mainRef = useRef<HTMLElement>(null)
   const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
     const currentPath = url.split(/[?#]/)[0] || '/'
-    const pathChanged = previousPath !== undefined && previousPath !== currentPath
-    previousPath = currentPath
+    const pathChanged = previousPath?.current !== undefined && previousPath.current !== currentPath
+    if (previousPath !== null) previousPath.current = currentPath
 
     if (!pathChanged) return
 
@@ -27,7 +28,7 @@ export default function usePageTransitionFocus() {
     })
 
     return () => cancelAnimationFrame(frame)
-  }, [url])
+  }, [url, previousPath])
 
   return { mainRef, announcement } as const
 }

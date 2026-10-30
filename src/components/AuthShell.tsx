@@ -14,8 +14,23 @@ interface AuthShellProps {
   readonly alternateLabel: string
   readonly route: string
   readonly action: string
+  /** What the framework guarantees about the page's form; the sign-in and registration forms' by default. */
+  readonly guarantees?: ReactNode
   readonly children: ReactNode
 }
+
+const formGuarantees = (
+  <>
+    <Guarantee>
+      The form is validated by its schema in <code className="font-mono text-xs">src/forms.ts</code>, then
+      sent through Better Auth’s own handler; browsers can’t reach{' '}
+      <code className="font-mono text-xs">/api/auth/*</code>.
+    </Guarantee>
+    <Guarantee>
+      Attempts are limited per address by Cloudflare’s Rate Limiting binding, and per account in D1.
+    </Guarantee>
+  </>
+)
 
 const tour = [
   {
@@ -46,6 +61,7 @@ export default function AuthShell({
   alternateLabel,
   route,
   action,
+  guarantees = formGuarantees,
   children,
 }: AuthShellProps) {
   const { mainRef, announcement } = usePageTransitionFocus()
@@ -124,14 +140,7 @@ export default function AuthShell({
           ))}
         </ul>
         <UnderTheHood route={route} action={action} compact>
-          <Guarantee>
-            The form is validated by its schema in <code className="font-mono text-xs">src/forms.ts</code>, then
-            sent through Better Auth’s own handler; browsers can’t reach{' '}
-            <code className="font-mono text-xs">/api/auth/*</code>.
-          </Guarantee>
-          <Guarantee>
-            Attempts are limited per address by Cloudflare’s Rate Limiting binding, and per account in D1.
-          </Guarantee>
+          {guarantees}
         </UnderTheHood>
       </aside>
     </div>

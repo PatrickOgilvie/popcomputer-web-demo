@@ -54,14 +54,27 @@ export const showCheckEmail = action(
   })
 )
 
-// The emailed link: it proves the address and signs nobody in. One that
+const Link = S.Struct({ token: requiredString })
+const expired = () => redirect(href(paths.login, {}, { error: 'link_expired' }))
+
+// The emailed link opens a page whose button proves the address, so a mail
+// scanner's or a link preview's fetch of the link proves nothing.
+export const showVerifyEmail = action(
+  Effect.gen(function* () {
+    const input = yield* validateRequest(Link)
+
+    return yield* render('Auth/VerifyEmail', input)
+  }).pipe(Effect.catchTag('ValidationError', expired))
+)
+
+// The page's button: it proves the address and signs nobody in. A link that
 // expired, after an hour, or was used already lands on sign-in with ?error=.
 export const verifyEmail = action(
   Effect.gen(function* () {
-    const input = yield* validateRequest(S.Struct({ token: requiredString }))
+    const input = yield* validateRequest(Link)
     const confirmed = yield* betterAuthRedirect('verifyEmail', { query: input }, { redirectTo: paths.login })
     yield* flash('success', 'Your email address is confirmed. Sign in to continue.')
 
     return confirmed
-  }).pipe(Effect.catchTag('ValidationError', () => redirect(href(paths.login, {}, { error: 'link_expired' }))))
+  }).pipe(Effect.catchTag('ValidationError', expired))
 )

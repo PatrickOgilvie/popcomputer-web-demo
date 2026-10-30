@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { readPage, testBrowser } from '@popcomputer/web/testing'
 import { paths } from '../src/paths'
-import { app, asksToSignIn, emailedLink, freshEnv, mailbox, password, register, send, visit } from './app'
+import { app, asksToSignIn, confirm, emailedLink, freshEnv, mailbox, password, register, send, visit } from './app'
 
 describe('registering', () => {
   test('signs the new member in and opens their dashboard, once their address is confirmed', async () => {
@@ -27,11 +27,28 @@ describe('registering', () => {
     ])
     expect(emailedLink(env, 'ada@example.com')).toStartWith(`${paths.verifyEmail}?token=`)
 
-    const confirmed = await browser.request(emailedLink(env, 'ada@example.com'))
+    const confirmed = await confirm(browser, emailedLink(env, 'ada@example.com'))
     const login = await readPage(await browser.follow(confirmed), 'Auth/Login')
 
     expect(login.flash.success).toBe('Your email address is confirmed. Sign in to continue.')
     expect(login.props.auth.user).toBeNull()
+  })
+
+  test('proves nothing when the link is only fetched, as a mail scanner does', async () => {
+    const env = await freshEnv()
+    const browser = testBrowser(app, env)
+    await browser.request(paths.register, send('POST', { name: 'Ada', email: 'ada@example.com', password }))
+    const scanner = testBrowser(app, env)
+
+    for (const method of ['GET', 'HEAD']) {
+      expect((await scanner.request(emailedLink(env, 'ada@example.com'), { method })).status).toBe(200)
+    }
+
+    const res = await browser.request(paths.login, send('POST', { email: 'ada@example.com', password }))
+    const form = await readPage(await browser.follow(res), 'Auth/Login')
+
+    expect(form.props.errors.email).toMatch(/confirm your email address first/i)
+    expect(form.props.auth.user).toBeNull()
   })
 
   test('names APP_URL in the link, whatever host the sign-up arrived at', async () => {
@@ -71,9 +88,12 @@ describe('registering', () => {
 
   test('sends a link that expired, or was never sent, to sign-in, saying so', async () => {
     const browser = testBrowser(app, await freshEnv())
+    const expired = `${paths.login}?error=link_expired`
 
-    for (const link of [`${paths.verifyEmail}?token=not-a-token`, paths.verifyEmail]) {
-      expect((await browser.request(link)).headers.get('Location')).toBe(`${paths.login}?error=link_expired`)
+    expect((await browser.request(paths.verifyEmail)).headers.get('Location')).toBe(expired)
+
+    for (const fields of [{ token: 'not-a-token' }, {}]) {
+      expect((await browser.request(paths.verifyEmail, send('POST', fields))).headers.get('Location')).toBe(expired)
     }
   })
 

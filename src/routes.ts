@@ -1,6 +1,6 @@
 import { action, render, RequireAuthLayer, RequireGuestLayer } from '@popcomputer/web/effect'
 import { betterAuthLogoutAction } from '@popcomputer/web/auth'
-import { showCheckEmail, signIn, signUp, verifyEmail } from './actions/auth'
+import { showCheckEmail, showVerifyEmail, signIn, signUp, verifyEmail } from './actions/auth'
 import { showDashboard } from './actions/dashboard'
 import {
   createProject,
@@ -23,8 +23,9 @@ routes
   .post(paths.register, signUp)
   .get(paths.checkEmail, showCheckEmail)
 
-// The emailed link works for anyone who has it, signed in or not.
-routes.get(paths.verifyEmail, verifyEmail)
+// The emailed link works for anyone who has it, signed in or not: it opens a
+// page, and only the page's button proves the address.
+routes.get(paths.verifyEmail, showVerifyEmail).post(paths.verifyEmail, verifyEmail)
 
 routes.post(paths.logout, betterAuthLogoutAction({ redirectTo: paths.login }))
 

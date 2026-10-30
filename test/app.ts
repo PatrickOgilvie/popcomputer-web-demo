@@ -1,6 +1,6 @@
 import { expect } from 'bun:test'
 import type { EmailMessage, EmailMessageBuilder, EmailSendResult, SendEmail } from '@cloudflare/workers-types'
-import { testBrowser, testEnv, testRateLimiter, type TestBrowser } from '@popcomputer/web/testing'
+import { readPage, testBrowser, testEnv, testRateLimiter, type TestBrowser } from '@popcomputer/web/testing'
 import { app } from '../src/app'
 import { paths } from '../src/paths'
 import { databases } from './databases'
@@ -72,9 +72,16 @@ export function emailedLink(env: Env, to: string): string {
   return `${url.pathname}${url.search}`
 }
 
+/** Open an emailed link's page and press its button, as the member does: only the button proves the address. */
+export async function confirm(browser: TestBrowser, link: string): Promise<Response> {
+  const page = await readPage(await browser.request(link, visit), 'Auth/VerifyEmail')
+
+  return browser.request(paths.verifyEmail, send('POST', { token: page.props.token }))
+}
+
 /**
- * A member who registered through the form, followed the link emailed to
- * them, and signed in, on a browser of their own.
+ * A member who registered through the form, confirmed the address the link
+ * emailed to them opens, and signed in, on a browser of their own.
  */
 export async function register(env: Env, name: string, email = `${name.toLowerCase()}@example.com`): Promise<TestBrowser> {
   const browser = testBrowser(app, env)
@@ -82,13 +89,16 @@ export async function register(env: Env, name: string, email = `${name.toLowerCa
 
   expect(registered.headers.get('Location')).toBe(paths.checkEmail)
 
-  const confirmed = await browser.request(emailedLink(env, email))
+  const confirmed = await confirm(browser, emailedLink(env, email))
 
   expect(confirmed.headers.get('Location')).toBe(paths.login)
 
   const signedIn = await browser.request(paths.login, send('POST', { email, password }))
 
   expect(signedIn.headers.get('Location')).toBe(paths.dashboard)
+
+  // The browser shows the dashboard, where signing in lands, as the page later forms post from.
+  await readPage(await browser.follow(signedIn), 'Dashboard')
 
   return browser
 }

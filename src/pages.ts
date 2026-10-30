@@ -25,6 +25,8 @@ export const pages = {
   'Auth/Register': S.Struct({}),
   // Whether the link was emailed, or written to the log for want of Email Sending.
   'Auth/CheckEmail': S.Struct({ sendsEmail: S.Boolean }),
+  // The emailed link's token, which the page's button posts back.
+  'Auth/VerifyEmail': S.Struct({ token: S.String }),
   Dashboard: S.Struct({
     recentProjects: S.Array(ProjectSummary),
     projectCount: S.Number,

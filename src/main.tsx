@@ -3,9 +3,11 @@ import { createInertiaApp } from '@inertiajs/react'
 import type { PageName } from '@popcomputer/web/effect'
 import type { WebPage } from '@popcomputer/web/react'
 import { createRoot } from 'react-dom/client'
+import PageTransitions from './components/PageTransitions'
 import CheckEmail from './pages/Auth/CheckEmail'
 import Login from './pages/Auth/Login'
 import Register from './pages/Auth/Register'
+import VerifyEmail from './pages/Auth/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import ErrorPage from './pages/Errors/Error'
 import CreateProject from './pages/Projects/Create'
@@ -21,6 +23,7 @@ const components: { readonly [Name in PageName]: WebPage<Name> } = {
   'Auth/Login': Login,
   'Auth/Register': Register,
   'Auth/CheckEmail': CheckEmail,
+  'Auth/VerifyEmail': VerifyEmail,
   Dashboard,
   'Projects/Index': ProjectsIndex,
   'Projects/Create': CreateProject,
@@ -37,6 +40,12 @@ void createInertiaApp({
   // The error page is not a registered page: it answers any other name.
   resolve: (name) => (isPage(name) ? components[name] : ErrorPage),
   setup({ el, App, props }) {
-    if (el !== null) createRoot(el).render(<App {...props} />)
+    if (el !== null) {
+      createRoot(el).render(
+        <PageTransitions>
+          <App {...props} />
+        </PageTransitions>
+      )
+    }
   },
 })

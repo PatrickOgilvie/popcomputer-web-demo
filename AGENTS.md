@@ -101,14 +101,17 @@ the live one.
 
 ## Accounts and email
 
-Signing up emails a link that confirms the address (`paths.verifyEmail`),
-and only then does the password sign in; Better Auth's options are in
+Signing up emails a link to a page whose button confirms the address
+(`paths.verifyEmail`: the GET shows the page and the POST proves the
+address, so a mail scanner's fetch proves nothing), and only then does the
+password sign in; Better Auth's options are in
 `src/auth.ts`. The template sends no email: `src/email.ts` writes each one
 to the log until `wrangler.jsonc` has the `send_email` binding `EMAIL` and
 `EMAIL_FROM` in vars. Cloudflare Email Sending needs Workers Paid and a
 domain on Cloudflare, so turn it on only when the user asks, as the README's
 "Sending email" says. In tests, `freshEnv()` gives `EMAIL` a `TestMailbox`,
-`emailedLink(env, address)` reads the link, and `register()` follows it.
+`emailedLink(env, address)` reads the link, `confirm(browser, link)` opens
+its page and presses the button, and `register()` does both.
 
 ## Deploying
 

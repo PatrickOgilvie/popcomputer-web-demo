@@ -200,8 +200,18 @@ curl -isS https://my-app.localhost/register \
 A sign-up signs no one in: it emails a link that confirms the address, and
 until you turn on [Sending email](#sending-email), `bun run dev`'s terminal
 prints the email instead. Open its link,
-`https://my-app.localhost/verify-email?token=…`, in a browser or with
-`curl -isS`, which answers 303 to `/login`. Then sign in:
+`https://my-app.localhost/verify-email?token=…`, in a browser: it shows a
+page whose button confirms the address, so a mail scanner that fetches the
+link confirms nothing. With curl, post the token as the button does, which
+answers 303 to `/login`:
+
+```bash
+curl -isS https://my-app.localhost/verify-email \
+  -H 'Origin: https://my-app.localhost' \
+  --data-urlencode 'token=…'
+```
+
+Then sign in:
 
 ```bash
 curl -isS https://my-app.localhost/login -c cookies.txt \

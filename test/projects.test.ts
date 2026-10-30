@@ -20,6 +20,7 @@ describe('a member’s projects', () => {
 
   test('a blank name goes back to the form with the error beside its field', async () => {
     const browser = await register(await freshEnv(), 'Ada')
+    await readPage(await browser.request(paths.newProject, visit), 'Projects/Create')
     const res = await browser.request(paths.projects, send('POST', { name: '  ', description: null, visibility: 'private' }))
     const form = await readPage(await browser.follow(res), 'Projects/Create')
 
